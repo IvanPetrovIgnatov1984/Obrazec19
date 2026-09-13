@@ -4,6 +4,7 @@ import { escapeHtml, fmtNum, fmtDate, toast, getSetting, setSetting, fileToCompr
 import { pickerHtml, wirePicker } from '../utils/picker.js';
 import { groupEntriesIntoReports, reportCardHtml, wireReportCards } from '../utils/reports.js';
 import { navigate } from '../router.js';
+import { getPeople, personFieldHtml, wirePersonField, rememberPerson } from '../utils/people.js';
 import { SMR_CATALOG, SMR_CATEGORY_ORDER, OTHER_CATEGORY, categoryForDescription, resolveCategory, keywordsFor } from '../data/smrCatalog.js';
 
 export async function batchReportView({ id }, query) {
@@ -124,8 +125,8 @@ export async function batchReportView({ id }, query) {
     }
   }
 
-  const technician = await getSetting('technicianName', '');
-  const technicianLabel = site.role === 'client' ? 'Отговорник от страна на Възложителя' : 'Технически ръководител / Отговорник';
+  const people = await getPeople();
+  const technicianLabel = site.role === 'client' ? 'Отчита (за Възложителя)' : 'Отчита (за Изпълнителя)';
 
   const body = `
     <div class="site-header">
@@ -150,9 +151,7 @@ export async function batchReportView({ id }, query) {
       <div id="rows-container"></div>
       <button type="button" id="add-row-btn" class="btn btn-add-more">+ Добави още СМР</button>
 
-      <label>${technicianLabel}
-        <input name="technician" value="${escapeHtml(technician)}" placeholder="Име" />
-      </label>
+      ${personFieldHtml({ label: technicianLabel, list: people.list, last: people.last })}
       <label>Бележка
         <textarea name="note" rows="2" placeholder="незадължително — важи за всички редове"></textarea>
       </label>
@@ -208,6 +207,8 @@ export async function batchReportView({ id }, query) {
           reload();
         },
       });
+
+      const readPerson = wirePersonField(app);
 
       const rowsContainer = app.querySelector('#rows-container');
       const rowsCountEl = app.querySelector('#rows-count');
@@ -446,7 +447,7 @@ export async function batchReportView({ id }, query) {
       app.querySelector('#batch-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
-        const technicianName = fd.get('technician').trim();
+        const technicianName = readPerson();
         const note = fd.get('note').trim();
 
         const toSave = [];
@@ -530,7 +531,7 @@ export async function batchReportView({ id }, query) {
             await db.put('photos', { id: uid(), entryId: entry.id, blob, createdAt: Date.now() });
           }
         }
-        await setSetting('technicianName', technicianName);
+        await rememberPerson(technicianName);
 
         // Проверяваме, че записаното наистина е в базата — иначе загубата минава незабелязано.
         const check = await db.getAllByIndex('entries', 'siteId', id);

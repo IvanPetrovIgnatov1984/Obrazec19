@@ -964,3 +964,16 @@ input[type="date"] { padding-left: 10px; padding-right: 6px; }
 
 .backup-card { display: flex; flex-direction: column; gap: 10px; }
 .backup-card .quick-actions { margin-bottom: 0; }
+
+/* ---- Кой отчита ---- */
+.person-field { display: flex; flex-direction: column; gap: 14px; }
+.person-field .person-new[hidden] { display: none; }
+.people-list { gap: 8px; margin-bottom: 14px; }
+.person-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 14px;
+}

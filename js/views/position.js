@@ -2,6 +2,7 @@ import { db, uid, today, deletePositionCascade } from '../db.js';
 import { layout } from '../utils/layout.js';
 import { escapeHtml, fmtNum, fmtDate, toast, getSetting, setSetting, fileToCompressedBlob } from '../utils/util.js';
 import { navigate } from '../router.js';
+import { getPeople, personFieldHtml, wirePersonField, rememberPerson } from '../utils/people.js';
 
 export async function positionDetailView({ id, posId }) {
   const site = await db.get('sites', id);
@@ -118,7 +119,7 @@ export async function reportView({ id, posId }) {
   const position = await db.get('positions', posId);
   if (!site || !position) return { html: layout({ title: 'Не е намерено', back: `/sites/${id}`, body: '<p>Позицията не съществува.</p>' }) };
 
-  const technician = await getSetting('technicianName', '');
+  const people = await getPeople();
   const remaining = Math.max(0, (Number(position.plannedQty) || 0) - (await remainingDone(posId)));
 
   const compound = (position.unit || '').includes('/');
@@ -160,9 +161,11 @@ export async function reportView({ id, posId }) {
       </label>
       ${qtyFieldHtml}
       ${position.unitPrice ? `<div class="muted small" id="value-result">Стойност: 0.00 €</div>` : ''}
-      <label>${site.role === 'client' ? 'Отговорник от страна на Възложителя' : 'Технически ръководител / Отговорник'}
-        <input name="technician" value="${escapeHtml(technician)}" placeholder="Име" />
-      </label>
+      ${personFieldHtml({
+        label: site.role === 'client' ? 'Отчита (за Възложителя)' : 'Отчита (за Изпълнителя)',
+        list: people.list,
+        last: people.last,
+      })}
       <label>Бележка
         <textarea name="note" rows="3" placeholder="незадължително"></textarea>
       </label>
@@ -179,6 +182,7 @@ export async function reportView({ id, posId }) {
   return {
     html: layout({ title: 'Ново отчитане', back: `/sites/${id}/positions/${posId}`, body }),
     mount(app) {
+      const readPerson = wirePersonField(app);
       const getCoats = () => Math.max(1, parseFloat(app.querySelector('[name=coats]')?.value) || 1);
       const getCurrentQty = () => {
         if (compound) {
@@ -260,7 +264,7 @@ export async function reportView({ id, posId }) {
           date: fd.get('date'),
           qty,
           note: fd.get('note').trim(),
-          technician: fd.get('technician').trim(),
+          technician: readPerson(),
           createdAt: Date.now(),
           ...(compound
             ? {
@@ -280,7 +284,7 @@ export async function reportView({ id, posId }) {
           alert('Отчитането НЕ беше записано.\n\n' + String((err && err.message) || err));
           return;
         }
-        await setSetting('technicianName', entry.technician);
+        await rememberPerson(entry.technician);
         for (const blob of photoBlobs) {
           await db.put('photos', { id: uid(), entryId: entry.id, blob, createdAt: Date.now() });
         }

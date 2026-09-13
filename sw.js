@@ -1,4 +1,4 @@
-const CACHE_NAME = 'obrazec19-v68';
+const CACHE_NAME = 'obrazec19-v70';
 
 // Файловете на приложението — винаги се теглят от мрежата, когато има връзка,
 // и се кешират само за офлайн работа. Така стар код не може да „залепне“.
@@ -14,6 +14,7 @@ const APP_SHELL = [
   './js/utils/util.js',
   './js/utils/layout.js',
   './js/utils/picker.js',
+  './js/utils/people.js',
   './js/utils/reports.js',
   './js/utils/backup.js',
   './js/utils/exporters.js',

@@ -2,8 +2,10 @@ import { db } from '../db.js';
 import { layout } from '../utils/layout.js';
 import { escapeHtml, toast, getSetting, setSetting } from '../utils/util.js';
 import { navigate } from '../router.js';
+import { getPeople, savePeople, removePerson } from '../utils/people.js';
 
 export async function companyView() {
+  const people = await getPeople();
   const company = (await getSetting('myCompany', null)) || {
     name: '', eik: '', address: '', vatRegistered: false, vatNumber: '', mol: '',
   };
@@ -34,11 +36,63 @@ export async function companyView() {
       </label>
       <button type="submit" class="btn btn-primary">Запази</button>
     </form>
+
+    <h3 class="section-title">Кой отчита</h3>
+    <div class="muted small">Имената, които излизат в менюто при отчитане. Всяко ново въведено име се добавя тук само.</div>
+    <div id="people-list" class="list people-list">
+      ${people.list.length
+        ? people.list
+            .map(
+              (n) => `
+        <div class="card person-row">
+          <span>${escapeHtml(n)}</span>
+          <button type="button" class="icon-btn-sm" data-del-person="${escapeHtml(n)}" aria-label="Премахни">🗑</button>
+        </div>`
+            )
+            .join('')
+        : '<div class="muted small">Още няма въведени имена.</div>'}
+    </div>
+    <form id="person-form" class="form form-inline">
+      <label>Добави име
+        <input name="person" placeholder="Име и фамилия" autocomplete="off" />
+      </label>
+      <button type="submit" class="btn btn-ghost">+ Добави</button>
+    </form>
   `;
 
   return {
     html: layout({ title: 'Моята фирма', back: '/sites', body }),
     mount(app) {
+      const reload = () => {
+        navigate('/company');
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      };
+
+      app.querySelector('#person-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = e.target.querySelector('[name=person]');
+        const name = input.value.trim();
+        if (!name) return;
+        if (people.list.some((n) => n.toLowerCase() === name.toLowerCase())) {
+          toast('Това име вече е в списъка');
+          return;
+        }
+        await savePeople([...people.list, name]);
+        input.value = '';
+        toast('Добавено');
+        reload();
+      });
+
+      app.querySelectorAll('[data-del-person]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const name = btn.getAttribute('data-del-person');
+          if (!confirm(`Премахване на „${name}“ от списъка?\n\nВече записаните отчитания не се променят.`)) return;
+          await removePerson(name);
+          toast('Премахнато');
+          reload();
+        });
+      });
+
       const vatCheckbox = app.querySelector('[name=vatRegistered]');
       const vatRow = app.querySelector('#vat-number-row');
       vatCheckbox.addEventListener('change', () => {
