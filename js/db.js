@@ -94,7 +94,18 @@ function capture(request) {
 }
 
 export const db = {
+  // Всеки запис носи кога е променен — оттам се разбира коя версия е по-новата
+  // при сверяване между устройства и при връщане от резервно копие.
   put(storeName, value) {
+    const stamped = { ...value, updatedAt: Date.now() };
+    return run(storeName, 'readwrite', (store) => {
+      store.put(stamped);
+      return { value: stamped };
+    });
+  },
+  // Записва както е — ползва се при връщане от файл, за да се запази
+  // оригиналното време на промяна.
+  putRaw(storeName, value) {
     return run(storeName, 'readwrite', (store) => {
       store.put(value);
       return { value };
@@ -120,6 +131,10 @@ export const db = {
       store.delete(id);
       return { value: undefined };
     });
+  },
+  // Имената на хранилищата — ползват се от резервното копие и по-късно от сверяването.
+  stores() {
+    return ['sites', 'positions', 'entries', 'photos', 'signatures', 'acts', 'settings'];
   },
   deleteByIndex(storeName, indexName, value) {
     return run(storeName, 'readwrite', (store) => {

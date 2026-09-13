@@ -3,6 +3,7 @@ import { layout } from '../utils/layout.js';
 import { escapeHtml, fmtNum, toast, getSetting } from '../utils/util.js';
 import { navigate } from '../router.js';
 import { APP_VERSION } from '../version.js';
+import { exportBackup, importBackup, describeCounts } from '../utils/backup.js';
 
 export async function listView() {
   const sites = await db.getAll('sites');
@@ -67,6 +68,17 @@ export async function listView() {
     <h3 class="section-title">Обекти ${sites.length ? `(${sites.length})` : ''}</h3>
     ${sites.length ? `<div class="list">${rows.join('')}</div>` : `<div class="empty">Няма добавени обекти.<br>Натиснете „+“ горе вдясно, за да добавите първия.</div>`}
 
+    <h3 class="section-title">Данни</h3>
+    <div class="card backup-card">
+      <div class="muted small">Всичко се пази само на това устройство. Направи архив, за да не загубиш отчитанията си и за да ги пренесеш на друг телефон.</div>
+      <div class="quick-actions">
+        <button type="button" id="backup-export" class="btn btn-ghost btn-sm">📤 Изнеси архив</button>
+        <button type="button" id="backup-import" class="btn btn-ghost btn-sm">📥 Върни от архив</button>
+        <input type="file" id="backup-file" accept="application/json,.json" hidden />
+      </div>
+      <div class="muted small" id="backup-status"></div>
+    </div>
+
     <div class="app-version">
       <span>Образец 19 · версия ${APP_VERSION} · ${sites.length} обекта · ${counts.positions} позиции · ${counts.entries} отчитания · ${counts.acts} акта</span>
       <button type="button" id="force-update" class="btn btn-ghost btn-sm">Обнови</button>
@@ -86,6 +98,42 @@ export async function listView() {
           navigate(card.getAttribute('data-href'));
         });
       });
+      const statusEl = app.querySelector('#backup-status');
+      app.querySelector('#backup-export').addEventListener('click', async () => {
+        statusEl.textContent = 'Подготвям архива…';
+        try {
+          const { counts, sizeKb } = await exportBackup({ share: true });
+          statusEl.textContent = `Архивът е готов — ${describeCounts(counts)} (${sizeKb} KB).`;
+        } catch (err) {
+          console.error(err);
+          statusEl.textContent = 'Архивът не беше направен: ' + ((err && err.message) || err);
+        }
+      });
+
+      const fileInput = app.querySelector('#backup-file');
+      app.querySelector('#backup-import').addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        if (!confirm('Връщане от архив?\n\nЗаписите от файла ще се добавят към сегашните. Където има разлика, остава по-новата версия. Нищо няма да се изтрие.')) {
+          fileInput.value = '';
+          return;
+        }
+        statusEl.textContent = 'Връщам данните…';
+        try {
+          const r = await importBackup(file);
+          toast(`Върнати ${r.added + r.updated} записа`);
+          statusEl.textContent = `Готово — ${r.added} нови, ${r.updated} обновени, ${r.skipped} пропуснати (по-стари от сегашните).`;
+          navigate('/sites');
+          window.dispatchEvent(new HashChangeEvent('hashchange'));
+        } catch (err) {
+          console.error(err);
+          statusEl.textContent = 'Връщането се провали: ' + ((err && err.message) || err);
+          alert('Връщането се провали.\n\n' + ((err && err.message) || err));
+        }
+        fileInput.value = '';
+      });
+
       app.querySelector('#force-update').addEventListener('click', async () => {
         try {
           if ('serviceWorker' in navigator) {

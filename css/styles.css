@@ -961,3 +961,6 @@ input[type="date"] { padding-left: 10px; padding-right: 6px; }
   .sheet-backdrop { align-items: center; }
   .sheet { box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2); }
 }
+
+.backup-card { display: flex; flex-direction: column; gap: 10px; }
+.backup-card .quick-actions { margin-bottom: 0; }
