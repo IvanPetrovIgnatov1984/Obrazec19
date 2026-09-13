@@ -134,7 +134,7 @@ export const db = {
   },
   // Имената на хранилищата — ползват се от резервното копие и по-късно от сверяването.
   stores() {
-    return ['sites', 'positions', 'entries', 'photos', 'signatures', 'acts', 'settings'];
+    return ['sites', 'positions', 'entries', 'photos', 'acts', 'settings'];
   },
   deleteByIndex(storeName, indexName, value) {
     return run(storeName, 'readwrite', (store) => {

@@ -96,7 +96,6 @@ export async function detailView({ id }) {
     <a class="btn btn-primary btn-block" href="#/sites/${id}/report">📝 Отчети изпълнени работи</a>
     <div class="quick-actions">
       <a class="btn btn-ghost" href="#/sites/${id}/history">📒 Дневник</a>
-      <a class="btn btn-ghost" href="#/sites/${id}/sign">✍️ Подпис</a>
       <a class="btn btn-ghost" href="#/sites/${id}/export">📄 Акт Образец 19</a>
     </div>
     <h3 class="section-title">Количествена сметка</h3>
@@ -130,7 +129,7 @@ export async function detailView({ id }) {
         });
       });
       app.querySelector('#delete-site-btn').addEventListener('click', async () => {
-        if (!confirm('Изтриване на целия обект — включително всички позиции, отчитания, снимки и подписи? Действието е необратимо.')) return;
+        if (!confirm('Изтриване на целия обект — включително всички позиции, отчитания, снимки и актове? Действието е необратимо.')) return;
         await deleteSiteCascade(id);
         toast('Обектът е изтрит');
         navigate('/sites');

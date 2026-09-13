@@ -5,7 +5,6 @@ import { detailView, newPositionView } from './views/siteDetail.js';
 import { positionDetailView, reportView } from './views/position.js';
 import { batchReportView } from './views/batchReport.js';
 import { historyView } from './views/history.js';
-import { signView } from './views/sign.js';
 import { exportView } from './views/export.js';
 import { companyView } from './views/company.js';
 
@@ -23,7 +22,6 @@ route('/sites/:id/positions/new', newPositionView);
 route('/sites/:id/positions/:posId', positionDetailView);
 route('/sites/:id/positions/:posId/report', reportView);
 route('/sites/:id/history', historyView);
-route('/sites/:id/sign', signView);
 route('/sites/:id/export', exportView);
 
 notFound(() => '<div class="empty">Страницата не е намерена. <a href="#/sites">Към обектите</a></div>');

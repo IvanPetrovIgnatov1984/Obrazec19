@@ -1,4 +1,4 @@
-const CACHE_NAME = 'obrazec19-v67';
+const CACHE_NAME = 'obrazec19-v68';
 
 // Файловете на приложението — винаги се теглят от мрежата, когато има връзка,
 // и се кешират само за офлайн работа. Така стар код не може да „залепне“.
@@ -22,7 +22,6 @@ const APP_SHELL = [
   './js/views/position.js',
   './js/views/batchReport.js',
   './js/views/history.js',
-  './js/views/sign.js',
   './js/views/export.js',
   './js/views/company.js',
   './js/data/smrCatalog.js',
@@ -30,7 +29,6 @@ const APP_SHELL = [
 
 // Библиотеки, шрифтове и икони — не се променят, взимат се от кеша.
 const STATIC = [
-  './vendor/signature_pad.umd.min.js',
   './vendor/jspdf.umd.min.js',
   './vendor/xlsx.full.min.js',
   './vendor/fonts/roboto-fonts.js',

@@ -153,7 +153,7 @@ export async function listView() {
       app.querySelectorAll('[data-del-site]').forEach((btn) => {
         btn.addEventListener('click', async (e) => {
           e.stopPropagation();
-          if (!confirm('Изтриване на обекта и всички свързани данни (позиции, отчитания, снимки, подписи)? Действието е необратимо.')) return;
+          if (!confirm('Изтриване на обекта и всички свързани данни (позиции, отчитания, снимки, актове)? Действието е необратимо.')) return;
           await deleteSiteCascade(btn.getAttribute('data-del-site'));
           toast('Обектът е изтрит');
           navigate('/sites');

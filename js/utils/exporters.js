@@ -135,7 +135,7 @@ export function resolveParties(site, myCompany) {
 }
 
 async function buildPdf(siteId, opts = {}) {
-  const { advance, actNo, actDate } = opts;
+  const { advance, actNo, actDate, handedBy, acceptedBy } = opts;
   const data = await gatherData(siteId, opts);
   const { site, myCompany, rows, periodFrom, periodTo } = data;
   const from = periodFrom;
@@ -244,9 +244,10 @@ async function buildPdf(siteId, opts = {}) {
   doc.setFontSize(9);
   doc.text('име / длъжност / дата / подпис', marginX, sigTop);
   y = sigTop + 20;
-  doc.text('за възложителя приел: ______________________________', marginX, y);
+  // Имената се изписват на реда; полагането на подписа става на хартия.
+  doc.text('за възложителя приел: ' + (acceptedBy || '______________________________'), marginX, y);
   y += 30;
-  doc.text('за изпълнителя предал: ______________________________', marginX, y);
+  doc.text('за изпълнителя предал: ' + (handedBy || '______________________________'), marginX, y);
 
   let sy = sigTop + 20;
   const sumLabelX = marginX + 260;
@@ -292,7 +293,7 @@ export async function sharePdf(siteId, opts = {}) {
 }
 
 async function buildXlsx(siteId, opts = {}) {
-  const { advance, actNo, actDate } = opts;
+  const { advance, actNo, actDate, handedBy, acceptedBy } = opts;
   const data = await gatherData(siteId, opts);
   const { site, myCompany, rows, periodFrom, periodTo } = data;
   const from = periodFrom;
@@ -312,6 +313,8 @@ async function buildXlsx(siteId, opts = {}) {
 
   const summaryRows = [
     { 'Обобщение': 'Акт №', 'Стойност': actNo || '' },
+    { 'Обобщение': 'Предал (за изпълнителя)', 'Стойност': handedBy || '' },
+    { 'Обобщение': 'Приел (за възложителя)', 'Стойност': acceptedBy || '' },
     { 'Обобщение': 'Дата на акта', 'Стойност': actDate ? fmtDate(actDate) : '' },
     { 'Обобщение': 'Възложител', 'Стойност': vazlojitel.name },
     { 'Обобщение': 'Данни на възложителя', 'Стойност': vazlojitel.idLine },

@@ -113,6 +113,7 @@ export async function exportView({ id }) {
             <span class="muted small">${fmtNum(a.due)} €</span>
           </div>
           <div class="muted small">${(a.entryIds || []).length} реда · СМР ${fmtNum(a.subtotal)} €${a.advance ? ' · аванс -' + fmtNum(a.advance) + ' €' : ''}</div>
+          ${a.handedBy || a.acceptedBy ? `<div class="muted small">${a.handedBy ? 'Предал: ' + escapeHtml(a.handedBy) : ''}${a.handedBy && a.acceptedBy ? ' · ' : ''}${a.acceptedBy ? 'Приел: ' + escapeHtml(a.acceptedBy) : ''}</div>` : ''}
           <div class="quick-actions">
             <button type="button" class="btn btn-primary btn-sm" data-act-share="${a.id}">📤 Изпрати</button>
             <button type="button" class="btn btn-ghost btn-sm" data-act-pdf="${a.id}">⬇️ PDF</button>
@@ -153,6 +154,15 @@ export async function exportView({ id }) {
         </label>
         <label>Дата на акта
           <input type="date" name="actDate" value="${today()}" />
+        </label>
+      </div>
+
+      <div class="form-row">
+        <label>Предал — за изпълнителя
+          <input name="handedBy" placeholder="Име и фамилия" />
+        </label>
+        <label>Приел — за възложителя
+          <input name="acceptedBy" placeholder="Име и фамилия" />
         </label>
       </div>
 
@@ -338,7 +348,12 @@ export async function exportView({ id }) {
 
       function actMeta() {
         const fd = new FormData(form);
-        return { actNo: parseInt(fd.get('actNo'), 10) || nextNo, actDate: fd.get('actDate') || today() };
+        return {
+          actNo: parseInt(fd.get('actNo'), 10) || nextNo,
+          actDate: fd.get('actDate') || today(),
+          handedBy: (fd.get('handedBy') || '').trim(),
+          acceptedBy: (fd.get('acceptedBy') || '').trim(),
+        };
       }
 
       makeActBtn.addEventListener('click', async () => {
@@ -347,7 +362,7 @@ export async function exportView({ id }) {
           toast('Избери поне едно отчитане');
           return;
         }
-        const { actNo, actDate } = actMeta();
+        const { actNo, actDate, handedBy, acceptedBy } = actMeta();
         const reportKeys = [...form.querySelectorAll('.report-pick:checked')].map((cb) => cb.value);
         toast('Генериране на акта…');
         try {
@@ -356,6 +371,8 @@ export async function exportView({ id }) {
             siteId: id,
             no: actNo,
             date: actDate,
+            handedBy,
+            acceptedBy,
             entryIds: state.entryIds,
             reportKeys,
             advance: state.advance,
@@ -365,7 +382,7 @@ export async function exportView({ id }) {
             due: state.totals.due,
             createdAt: Date.now(),
           });
-          const how = await sharePdf(id, { entryIds: state.entryIds, advance: state.advance, actNo, actDate });
+          const how = await sharePdf(id, { entryIds: state.entryIds, advance: state.advance, actNo, actDate, handedBy, acceptedBy });
           toast(
             how === 'shared'
               ? `Акт № ${actNo} е издаден и изпратен`
@@ -386,9 +403,9 @@ export async function exportView({ id }) {
           toast('Избери поне едно отчитане');
           return;
         }
-        const { actNo, actDate } = actMeta();
+        const { actNo, actDate, handedBy, acceptedBy } = actMeta();
         try {
-          await exportXlsx(id, { entryIds: state.entryIds, advance: state.advance, actNo, actDate });
+          await exportXlsx(id, { entryIds: state.entryIds, advance: state.advance, actNo, actDate, handedBy, acceptedBy });
         } catch (err) {
           console.error(err);
           toast('Грешка при износ');
@@ -426,14 +443,14 @@ export async function exportView({ id }) {
           const act = acts.find((a) => a.id === btn.getAttribute('data-act-pdf'));
           if (!act) return;
           toast('Генериране…');
-          await exportPdf(id, { entryIds: act.entryIds, advance: act.advance, actNo: act.no, actDate: act.date });
+          await exportPdf(id, { entryIds: act.entryIds, advance: act.advance, actNo: act.no, actDate: act.date, handedBy: act.handedBy, acceptedBy: act.acceptedBy });
         });
       });
       app.querySelectorAll('[data-act-xlsx]').forEach((btn) => {
         btn.addEventListener('click', async () => {
           const act = acts.find((a) => a.id === btn.getAttribute('data-act-xlsx'));
           if (!act) return;
-          await exportXlsx(id, { entryIds: act.entryIds, advance: act.advance, actNo: act.no, actDate: act.date });
+          await exportXlsx(id, { entryIds: act.entryIds, advance: act.advance, actNo: act.no, actDate: act.date, handedBy: act.handedBy, acceptedBy: act.acceptedBy });
         });
       });
       app.querySelectorAll('[data-act-del]').forEach((btn) => {
