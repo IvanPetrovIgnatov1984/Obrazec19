@@ -101,7 +101,7 @@ export function advancePlan(site, { boqValue = 0, periodValue = 0, priorValue = 
 
 function counterpartyIdLine(site) {
   if (site.counterpartyType === 'individual') {
-    return site.egn ? `ЕГН: ${site.egn}` : 'Физическо лице';
+    return 'Физическо лице';
   }
   const vatPart = site.vatRegistered ? `ИН по ЗДДС: ${site.vatNumber || '—'}` : 'Нерегистриран по ЗДДС';
   return `ЕИК: ${site.eik || '—'}   ${vatPart}`;

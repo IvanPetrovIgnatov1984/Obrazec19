@@ -1,4 +1,5 @@
 import { route, notFound, startRouter, navigate } from './router.js';
+import { db } from './db.js';
 import { listView, newSiteView, editSiteView } from './views/sites.js';
 import { detailView, newPositionView } from './views/siteDetail.js';
 import { positionDetailView, reportView } from './views/position.js';
@@ -26,6 +27,21 @@ route('/sites/:id/sign', signView);
 route('/sites/:id/export', exportView);
 
 notFound(() => '<div class="empty">Страницата не е намерена. <a href="#/sites">Към обектите</a></div>');
+
+// Еднократно изчистване: ЕГН вече не се събира — премахва се и от старите записи.
+(async () => {
+  try {
+    const sites = await db.getAll('sites');
+    for (const site of sites) {
+      if (Object.prototype.hasOwnProperty.call(site, 'egn')) {
+        const { egn, ...rest } = site;
+        await db.put('sites', rest);
+      }
+    }
+  } catch (err) {
+    console.error('Изчистването на ЕГН се провали', err);
+  }
+})();
 
 startRouter();
 

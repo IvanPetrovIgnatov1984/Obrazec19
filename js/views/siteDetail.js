@@ -45,7 +45,7 @@ export async function detailView({ id }) {
   const isCompany = site.counterpartyType !== 'individual';
   const counterpartyLine = isCompany
     ? `Фирма · ЕИК ${escapeHtml(site.eik || '—')}${site.vatRegistered ? ' · ' + escapeHtml(site.vatNumber || 'рег. по ДДС') : ' · нерегистрирана по ДДС'}`
-    : `Физическо лице${site.egn ? ' · ЕГН ' + escapeHtml(site.egn) : ''}`;
+    : 'Физическо лице';
   const isClientRole = site.role === 'client';
 
   // Двете страни по акта — с имената им, а не с роля спрямо потребителя.

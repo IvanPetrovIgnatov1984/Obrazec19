@@ -167,7 +167,7 @@ export async function listView() {
 const EMPTY_SITE = {
   name: '', address: '', clientName: '', clientAddress: '',
   role: 'contractor', counterpartyType: 'company',
-  eik: '', vatRegistered: false, vatNumber: '', egn: '',
+  eik: '', vatRegistered: false, vatNumber: '',
   advanceMode: 'amount', advanceAmount: '', advancePercent: '', advanceMethod: '',
 };
 
@@ -235,9 +235,7 @@ function siteFormHtml(site, submitLabel, boqValue) {
       </div>
 
       <div data-individual-fields ${isCompany ? 'hidden' : ''}>
-        <label>ЕГН
-          <input name="egn" value="${escapeHtml(s.egn || '')}" placeholder="незадължително" />
-        </label>
+        <div class="muted small">За физическо лице са достатъчни име и адрес. Приложението не събира ЕГН.</div>
       </div>
 
       <label id="counterparty-address-label">${t.addressLabel}
@@ -367,7 +365,6 @@ function wireSiteForm(app, onSubmit, boqValue) {
       eik: isCompany ? fd.get('eik').trim() : '',
       vatRegistered: vatOn,
       vatNumber: vatOn ? fd.get('vatNumber').trim() : '',
-      egn: !isCompany ? fd.get('egn').trim() : '',
       advanceMode: fd.get('advanceMode') === 'percent' ? 'percent' : 'amount',
       advanceAmount: parseFloat(fd.get('advanceAmount')) || 0,
       advancePercent: parseFloat(fd.get('advancePercent')) || 0,
