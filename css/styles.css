@@ -1,24 +1,27 @@
+/* Минималистична основа: плоски повърхности, косъмни разделители,
+   един акцент, без градиенти и без размиване. */
 :root {
   --accent: #0a84ff;
-  --accent-dark: #0060df;
+  --accent-dark: #0069d9;
   --accent-rgb: 10, 132, 255;
-  --bg: #eef2f8;
-  --bg-rgb: 238, 242, 248;
+  --bg: #f7f7f8;
+  --bg-rgb: 247, 247, 248;
   --surface-rgb: 255, 255, 255;
-  --surface: rgba(var(--surface-rgb), 0.72);
+  --surface: #ffffff;
+  --surface-2: #f2f2f4;
   --surface-solid: #ffffff;
-  --glass-border: rgba(255, 255, 255, 0.6);
-  --glass-highlight: rgba(255, 255, 255, 0.85);
-  --text: #1c1c1e;
-  --muted: #6e7076;
-  --border: rgba(60, 60, 67, 0.13);
-  --danger: #ff3b30;
-  --danger-rgb: 255, 59, 48;
-  --success: #30d158;
-  --radius: 20px;
-  --radius-lg: 26px;
-  --radius-sm: 14px;
-  --blur: 24px;
+  --glass-border: rgba(0, 0, 0, 0.09);
+  --glass-highlight: transparent;
+  --text: #111113;
+  --muted: #7a7a80;
+  --border: rgba(0, 0, 0, 0.09);
+  --danger: #e5342a;
+  --danger-rgb: 229, 52, 42;
+  --success: #1ea54c;
+  --radius: 14px;
+  --radius-lg: 16px;
+  --radius-sm: 10px;
+  --blur: 0px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   color-scheme: light;
@@ -26,22 +29,22 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --accent: #0a84ff;
-    --accent-dark: #409cff;
-    --accent-rgb: 10, 132, 255;
-    --bg: #0b0b10;
-    --bg-rgb: 11, 11, 16;
-    --surface-rgb: 30, 30, 36;
-    --surface: rgba(var(--surface-rgb), 0.68);
-    --surface-solid: #1c1c1e;
-    --glass-border: rgba(255, 255, 255, 0.14);
-    --glass-highlight: rgba(255, 255, 255, 0.16);
-    --text: #f2f2f7;
-    --muted: #9a9aa2;
-    --border: rgba(255, 255, 255, 0.14);
-    --danger: #ff453a;
-    --danger-rgb: 255, 69, 58;
-    --success: #32d74b;
+    --accent: #4a9eff;
+    --accent-dark: #2f8bf0;
+    --accent-rgb: 74, 158, 255;
+    --bg: #0c0c0e;
+    --bg-rgb: 12, 12, 14;
+    --surface-rgb: 24, 24, 27;
+    --surface: #18181b;
+    --surface-2: #202024;
+    --surface-solid: #18181b;
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --text: #f4f4f5;
+    --muted: #8e8e96;
+    --border: rgba(255, 255, 255, 0.1);
+    --danger: #ff5f57;
+    --danger-rgb: 255, 95, 87;
+    --success: #35c76a;
     color-scheme: dark;
   }
 }
@@ -61,21 +64,7 @@ html, body {
 body {
   position: relative;
   overflow-x: hidden;
-  background-image:
-    radial-gradient(ellipse 60% 40% at 15% 8%, rgba(120, 170, 255, 0.28), transparent 60%),
-    radial-gradient(ellipse 55% 35% at 90% 90%, rgba(255, 155, 190, 0.22), transparent 60%),
-    radial-gradient(ellipse 45% 30% at 85% 5%, rgba(160, 130, 255, 0.18), transparent 60%);
-  background-attachment: fixed;
   background-color: var(--bg);
-}
-
-@media (prefers-color-scheme: dark) {
-  body {
-    background-image:
-      radial-gradient(ellipse 60% 40% at 15% 8%, rgba(60, 110, 220, 0.35), transparent 60%),
-      radial-gradient(ellipse 55% 35% at 90% 90%, rgba(190, 60, 120, 0.28), transparent 60%),
-      radial-gradient(ellipse 45% 30% at 85% 5%, rgba(120, 80, 220, 0.25), transparent 60%);
-  }
 }
 
 #app {
@@ -93,12 +82,9 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: calc(12px + var(--safe-top)) 14px 12px;
-  background: rgba(var(--surface-rgb), 0.62);
-  -webkit-backdrop-filter: blur(var(--blur)) saturate(180%);
-  backdrop-filter: blur(var(--blur)) saturate(180%);
-  border-bottom: 1px solid var(--glass-border);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4) inset;
+  padding: calc(10px + var(--safe-top)) 12px 10px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
 }
 
 .topbar h1 {
@@ -155,17 +141,12 @@ body {
 .card {
   display: block;
   background: var(--surface);
-  -webkit-backdrop-filter: blur(var(--blur)) saturate(160%);
-  backdrop-filter: blur(var(--blur)) saturate(160%);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 15px;
   text-decoration: none;
   color: inherit;
-  box-shadow:
-    0 1px 1px rgba(255, 255, 255, 0.5) inset,
-    0 8px 20px -12px rgba(20, 30, 60, 0.25);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: background 0.15s ease;
 }
 
 .site-card-top, .entry-card .site-card-top {
@@ -176,17 +157,18 @@ body {
 }
 
 .site-card, .pos-card { cursor: pointer; }
-.site-card:active, .pos-card:active {
-  transform: scale(0.98);
-  box-shadow: 0 1px 1px rgba(255, 255, 255, 0.5) inset, 0 4px 10px -8px rgba(20, 30, 60, 0.3);
-}
+.site-card:active, .pos-card:active { background: var(--surface-2); }
 
 .card-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
 }
+.card-actions .muted { font-size: 13px; white-space: nowrap; }
+
+/* Заглавието на картата поема пренасянето, броячът остава на един ред. */
+.site-card-top > strong { min-width: 0; }
 
 .icon-btn-sm {
   width: 30px;
@@ -208,8 +190,8 @@ body {
 .small { font-size: 13px; }
 
 .progress {
-  height: 7px;
-  background: rgba(120, 120, 128, 0.16);
+  height: 3px;
+  background: rgba(120, 120, 128, 0.2);
   border-radius: 999px;
   margin-top: 10px;
   overflow: hidden;
@@ -217,11 +199,11 @@ body {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent), #64b5ff);
+  background: var(--accent);
   border-radius: 999px;
   transition: width 0.3s ease;
 }
-.progress-fill.over { background: linear-gradient(90deg, var(--success), #6ee89a); }
+.progress-fill.over { background: var(--success); }
 
 .site-header {
   padding: 6px 2px 16px;
@@ -238,10 +220,9 @@ body {
 .section-title {
   font-size: 13px;
   color: var(--muted);
-  margin: 22px 0 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 650;
+  margin: 26px 0 10px;
+  letter-spacing: 0;
+  font-weight: 550;
 }
 
 .btn {
@@ -249,47 +230,34 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: none;
-  border-radius: 999px;
-  padding: 13px 18px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 550;
   cursor: pointer;
   text-decoration: none;
-  transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
-  position: relative;
-  overflow: hidden;
+  transition: opacity 0.12s ease, background 0.12s ease;
 }
-.btn:active { transform: scale(0.96); }
+.btn:active { opacity: 0.65; }
 
 .btn-primary {
-  background: linear-gradient(180deg, #3aa0ff, var(--accent) 60%, var(--accent-dark));
+  background: var(--accent);
   color: #fff;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.5) inset,
-    0 6px 16px -6px rgba(10, 132, 255, 0.55);
-}
-.btn-primary::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), transparent 55%);
-  pointer-events: none;
 }
 
 .btn-ghost {
-  background: rgba(var(--surface-rgb), 0.55);
-  -webkit-backdrop-filter: blur(var(--blur)) saturate(160%);
-  backdrop-filter: blur(var(--blur)) saturate(160%);
+  background: transparent;
   color: var(--accent);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 1px 1px rgba(255, 255, 255, 0.5) inset;
+  border-color: var(--border);
 }
 
 .btn-danger-ghost {
-  background: rgba(var(--danger-rgb), 0.1);
+  background: transparent;
   color: var(--danger);
-  border: 1px solid rgba(var(--danger-rgb), 0.3);
+  border-color: transparent;
+  padding-left: 0;
+  padding-right: 0;
 }
 .btn-sm { padding: 8px 14px; font-size: 13px; margin-top: 8px; }
 .btn-block { display: flex; width: 100%; margin-bottom: 8px; }
@@ -327,20 +295,21 @@ input, textarea, select {
   font-family: inherit;
   width: 100%;
   font-size: 16px;
-  padding: 12px 14px;
+  padding: 11px 13px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: rgba(var(--surface-rgb), 0.55);
+  background: var(--surface);
   color: var(--text);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  transition: border-color 0.12s ease;
 }
-input:focus, textarea:focus {
+input:focus, textarea:focus, select:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.18);
 }
+
+/* Полето за дата се нуждае от повече място заради иконата на календара. */
+input[type="date"] { padding-left: 10px; padding-right: 6px; }
+.form-row label:has(input[type="date"]) { flex: 1.35; }
 
 .checkbox-row {
   flex-direction: row !important;
@@ -358,9 +327,9 @@ input:focus, textarea:focus {
 .segmented {
   display: flex;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
-  background: rgba(120, 120, 128, 0.12);
+  background: var(--surface-2);
   padding: 3px;
   gap: 2px;
 }
@@ -370,24 +339,21 @@ input:focus, textarea:focus {
   background: transparent;
   color: var(--text);
   padding: 9px 10px;
-  border-radius: 999px;
+  border-radius: calc(var(--radius-sm) - 3px);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 550;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 .segmented-btn.active {
   background: var(--surface-solid);
   color: var(--accent);
-  box-shadow: 0 2px 6px -2px rgba(0, 0, 0, 0.25);
 }
 
 .cat-group {
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: rgba(var(--surface-rgb), 0.5);
-  -webkit-backdrop-filter: blur(var(--blur)) saturate(160%);
-  backdrop-filter: blur(var(--blur)) saturate(160%);
+  background: var(--surface);
   margin-bottom: 8px;
   overflow: hidden;
 }
@@ -431,8 +397,8 @@ input:focus, textarea:focus {
   align-items: flex-start;
   gap: 2px;
   text-align: left;
-  background: rgba(var(--surface-rgb), 0.6);
-  border: 1px solid var(--glass-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   font-size: 14px;
@@ -462,10 +428,11 @@ input:focus, textarea:focus {
 }
 
 .role-banner {
-  background: rgba(var(--accent-rgb), 0.1);
-  border: 1px solid rgba(var(--accent-rgb), 0.25);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-left: 2px solid var(--accent);
+  border-radius: 0;
+  padding: 2px 0 2px 12px;
   font-size: 13px;
   line-height: 1.5;
   color: var(--text);
@@ -514,8 +481,8 @@ input:focus, textarea:focus {
   align-items: flex-start;
   gap: 2px;
   text-align: left;
-  background: rgba(var(--surface-rgb), 0.6);
-  border: 1px solid var(--glass-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   font-size: 14px;
@@ -556,7 +523,7 @@ input:focus, textarea:focus {
   height: 72px;
   object-fit: cover;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--border);
 }
 
 .thumb-wrap {
@@ -609,8 +576,6 @@ input:focus, textarea:focus {
   bottom: calc(20px + var(--safe-bottom));
   transform: translateX(-50%) translateY(20px);
   background: rgba(28, 28, 30, 0.78);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
   color: #fff;
   padding: 12px 20px;
   border-radius: 999px;
@@ -631,15 +596,13 @@ input:focus, textarea:focus {
   bottom: calc(16px + var(--safe-bottom));
   right: 16px;
   z-index: 200;
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  border: 1px solid var(--glass-border);
-  background: rgba(var(--surface-rgb), 0.6);
-  -webkit-backdrop-filter: blur(var(--blur)) saturate(180%);
-  backdrop-filter: blur(var(--blur)) saturate(180%);
-  color: var(--accent);
-  font-size: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 17px;
   line-height: 1;
   display: flex;
   align-items: center;
@@ -668,12 +631,11 @@ input:focus, textarea:focus {
 
 .btn-add-more {
   width: 100%;
-  border: 1px dashed rgba(var(--accent-rgb), 0.5);
-  background: rgba(var(--accent-rgb), 0.07);
+  border: 1px solid var(--border);
+  background: transparent;
   color: var(--accent);
-  font-weight: 600;
+  font-weight: 550;
 }
-.btn-add-more:active { background: rgba(var(--accent-rgb), 0.16); }
 
 .pick-box {
   display: flex;
@@ -691,9 +653,9 @@ input:focus, textarea:focus {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: rgba(var(--surface-rgb), 0.45);
+  background: var(--surface);
   padding: 6px;
 }
 
@@ -705,13 +667,11 @@ input:focus, textarea:focus {
   top: -6px;
   z-index: 1;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
-  background: rgba(var(--surface-rgb), 0.92);
-  -webkit-backdrop-filter: blur(var(--blur)) saturate(160%);
-  backdrop-filter: blur(var(--blur)) saturate(160%);
+  background: var(--surface);
   padding: 7px 8px 5px;
   margin: 0 -6px;
 }
@@ -762,15 +722,7 @@ input:focus, textarea:focus {
 
 .row-result { margin-top: 6px; }
 
-.tag-extra {
-  display: inline-block;
-  background: rgba(var(--accent-rgb), 0.14);
-  color: var(--accent);
-  border-radius: 999px;
-  padding: 1px 8px;
-  font-size: 11px;
-  font-weight: 600;
-}
+.tag-extra { color: var(--accent); font-weight: 550; }
 
 /* ---- Отчитане като едно цяло: сгъваема карта с редовете вътре ---- */
 .report-card { padding: 0; overflow: hidden; }
@@ -814,9 +766,9 @@ input:focus, textarea:focus {
   flex-direction: column;
   gap: 4px;
   padding: 10px 12px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: rgba(var(--surface-rgb), 0.5);
+  background: var(--surface);
 }
 .report-line .nowrap { white-space: nowrap; }
 .report-line .btn { align-self: flex-end; padding: 5px 12px; font-size: 12px; }
@@ -827,7 +779,7 @@ input:focus, textarea:focus {
 .party-row { display: flex; flex-direction: column; gap: 1px; }
 .party-label {
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
@@ -902,7 +854,7 @@ input:focus, textarea:focus {
   gap: 2px;
   padding: 8px 10px;
   border-radius: var(--radius-sm);
-  background: rgba(var(--surface-rgb), 0.55);
+  background: var(--surface);
 }
 .act-line-desc { font-size: 14px; }
 .act-card { margin-bottom: 10px; }
@@ -930,9 +882,9 @@ input:focus, textarea:focus {
   gap: 10px;
   cursor: pointer;
   padding: 9px 12px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: rgba(var(--surface-rgb), 0.5);
+  background: var(--surface);
   margin-bottom: 6px;
 }
 .boq-no {
@@ -945,7 +897,7 @@ input:focus, textarea:focus {
 .boq-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .boq-desc { font-size: 14px; }
 .boq-value { flex-shrink: 0; font-size: 14px; font-weight: 600; white-space: nowrap; }
-.boq-total { background: rgba(var(--accent-rgb), 0.1); border-color: rgba(var(--accent-rgb), 0.3); cursor: default; }
+.boq-total { background: transparent; border-color: transparent; border-top: 1px solid var(--border); border-radius: 0; cursor: default; }
 .form .boq-row input.boq-pick {
   width: 20px;
   height: 20px;
@@ -968,8 +920,6 @@ input:focus, textarea:focus {
   align-items: flex-end;
   justify-content: center;
   background: rgba(0, 0, 0, 0.45);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
   padding: 12px;
 }
 .sheet {
@@ -980,12 +930,10 @@ input:focus, textarea:focus {
   gap: 8px;
   padding: 18px;
   border-radius: var(--radius);
-  border: 1px solid var(--glass-border);
-  background: rgba(var(--surface-rgb), 0.96);
-  -webkit-backdrop-filter: blur(var(--blur)) saturate(180%);
-  backdrop-filter: blur(var(--blur)) saturate(180%);
-  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.35);
-  animation: sheet-up 0.22s ease;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.18);
+  animation: sheet-up 0.18s ease;
 }
 @keyframes sheet-up {
   from { transform: translateY(16px); opacity: 0; }
@@ -996,20 +944,20 @@ input:focus, textarea:focus {
 .sheet-btn {
   width: 100%;
   padding: 14px 16px;
-  border-radius: 999px;
-  border: 1px solid var(--glass-border);
-  background: rgba(120, 120, 128, 0.12);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
   color: var(--text);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }
-.sheet-btn:active { transform: scale(0.98); }
+.sheet-btn:active { background: var(--surface-2); }
 .sheet-cancel { text-align: center; background: transparent; color: var(--muted); font-weight: 500; }
 
 /* На широк екран менюто стои в средата, а не долепено долу. */
 @media (min-width: 700px) {
   .sheet-backdrop { align-items: center; }
-  .sheet { box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45); }
+  .sheet { box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2); }
 }
