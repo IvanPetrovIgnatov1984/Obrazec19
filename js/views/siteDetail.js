@@ -26,9 +26,11 @@ export async function detailView({ id }) {
       const { done, planned, pct } = await positionProgress(p);
       const over = planned > 0 && done > planned;
       // Позиции, добавени в движение при отчитане, нямат количество по КС — показваме ги като допълнителни.
+      const noPrice = !Number(p.unitPrice);
+      const priceTag = noPrice ? ' · <span class="tag-warn">няма цена</span>' : '';
       const qtyLine = planned > 0
-        ? `${fmtNum(done)} / ${fmtNum(planned)} ${escapeHtml(p.unit || '')}${p.unitPrice ? ' · ' + fmtNum(done * p.unitPrice) + ' / ' + fmtNum(planned * p.unitPrice) + ' €' : ''}`
-        : `${fmtNum(done)} ${escapeHtml(p.unit || '')}${p.unitPrice ? ' · ' + fmtNum(done * p.unitPrice) + ' €' : ''} · <span class="tag-extra">извън КС</span>`;
+        ? `${fmtNum(done)} / ${fmtNum(planned)} ${escapeHtml(p.unit || '')}${p.unitPrice ? ' · ' + fmtNum(done * p.unitPrice) + ' / ' + fmtNum(planned * p.unitPrice) + ' €' : ''}${priceTag}`
+        : `${fmtNum(done)} ${escapeHtml(p.unit || '')}${p.unitPrice ? ' · ' + fmtNum(done * p.unitPrice) + ' €' : ''} · <span class="tag-extra">извън КС</span>${priceTag}`;
       return `
         <div class="card pos-card" data-href="/sites/${id}/positions/${p.id}">
           <div class="site-card-top">

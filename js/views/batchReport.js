@@ -327,7 +327,7 @@ export async function batchReportView({ id }, query) {
           if (coats > 1) parts.push(`${fmtNum(base)} × ${coats} ръце = ${fmtNum(qty)} ${position.unit}`);
           else if ((position.unit || '').includes('/')) parts.push(`= ${fmtNum(qty)} ${position.unit}`);
           if (position.unitPrice) parts.push(`Стойност: ${fmtNum(qty * position.unitPrice)} €`);
-          else if (qty) parts.push(`${fmtNum(qty)} ${position.unit}${position.isNew ? ' · въведи единична цена за стойност' : ''}`);
+          else if (qty) parts.push(`${fmtNum(qty)} ${position.unit} · няма единична цена, стойност няма да се сметне`);
           if (!position.isNew) {
             const rem = remainingOf(position);
             if (rem != null) parts.push(`остават ${fmtNum(rem)} ${position.unit}`);

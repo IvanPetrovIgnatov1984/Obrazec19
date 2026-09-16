@@ -146,6 +146,7 @@ export async function exportView({ id }) {
       <h3 class="section-title">Количествена сметка на акта <span id="boq-count" class="muted"></span></h3>
       <div class="muted small">Сглобява се от отчетените СМР. Махни отметка на ред, за да го оставиш за следващ акт.</div>
       <div id="act-boq"></div>
+      <div class="price-notice" id="price-warning" hidden></div>
 
       <h3 class="section-title">Акт</h3>
       <div class="form-row">
@@ -232,6 +233,7 @@ export async function exportView({ id }) {
       let lastState = null;
       const boqEl = app.querySelector('#act-boq');
       const boqCountEl = app.querySelector('#boq-count');
+      const priceWarnEl = app.querySelector('#price-warning');
 
       // Количествената сметка на акта — редовете идват от отчетените СМР,
       // събрани по позиция. Всеки ред може да се остави за следващ акт.
@@ -245,6 +247,7 @@ export async function exportView({ id }) {
         }
         let total = 0;
         let n = 0;
+        let missingPrice = 0;
         boqEl.innerHTML =
           rows
             .map((r) => {
@@ -254,13 +257,19 @@ export async function exportView({ id }) {
                 n += 1;
               }
               const from = (reportsByPosition.get(r.position.id) || []).join(', ');
+              const noPrice = !r.unitPrice;
+              if (noPrice && !off) missingPrice++;
               return `
-              <label class="boq-row${off ? ' off' : ''}">
+              <label class="boq-row${off ? ' off' : ''}${noPrice ? ' no-price' : ''}">
                 <input type="checkbox" class="boq-pick" value="${escapeHtml(r.position.id)}" ${off ? '' : 'checked'} />
                 <span class="boq-no">${off ? '—' : n}</span>
                 <span class="boq-body">
                   <span class="boq-desc">${escapeHtml(r.position.code ? r.position.code + ' · ' : '')}${escapeHtml(r.position.description)}</span>
-                  <span class="muted small">${fmtNum(r.qty)} ${escapeHtml(r.position.unit || '')} × ${fmtNum(r.unitPrice)} €${from ? ' · от ' + from : ''}</span>
+                  <span class="muted small">${fmtNum(r.qty)} ${escapeHtml(r.position.unit || '')}${noPrice ? '' : ' × ' + fmtNum(r.unitPrice) + ' €'}${from ? ' · от ' + from : ''}</span>
+                  ${noPrice ? `<span class="price-fix">
+                      <span class="price-warn">Няма единична цена</span>
+                      <input type="number" step="any" inputmode="decimal" class="boq-price" data-pos="${escapeHtml(r.position.id)}" placeholder="€ / ${escapeHtml(r.position.unit || '')}" />
+                    </span>` : ''}
                 </span>
                 <span class="boq-value">${fmtNum(r.value)} €</span>
               </label>`;
@@ -275,6 +284,25 @@ export async function exportView({ id }) {
             refreshSummary();
           });
         });
+
+        // Цената се въвежда на място — иначе актът излиза с нули и не е ясно защо.
+        boqEl.querySelectorAll('.boq-price').forEach((inp) => {
+          inp.addEventListener('click', (e) => e.preventDefault());
+          inp.addEventListener('change', async () => {
+            const price = parseFloat(inp.value) || 0;
+            if (!price) return;
+            const position = await db.get('positions', inp.getAttribute('data-pos'));
+            if (!position) return;
+            await db.put('positions', { ...position, unitPrice: price });
+            toast('Цената е записана в количествената сметка');
+            refreshSummary();
+          });
+        });
+
+        priceWarnEl.hidden = missingPrice === 0;
+        priceWarnEl.textContent = missingPrice
+          ? `${missingPrice} ${missingPrice === 1 ? 'позиция е' : 'позиции са'} без единична цена — затова сумите излизат непълни. Въведи цената в реда и тя се записва в количествената сметка.`
+          : '';
       }
 
       async function refreshSummary() {

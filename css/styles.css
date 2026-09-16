@@ -977,3 +977,20 @@ input[type="date"] { padding-left: 10px; padding-right: 6px; }
   gap: 10px;
   padding: 11px 14px;
 }
+
+/* ---- Позиция без единична цена ---- */
+.boq-row.no-price { border-color: rgba(var(--danger-rgb), 0.4); }
+.price-fix { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.price-warn { font-size: 12px; color: var(--danger); font-weight: 550; }
+.form .boq-row input.boq-price { width: 100%; max-width: 190px; }
+.price-notice {
+  border-left: 2px solid var(--danger);
+  padding: 8px 0 8px 12px;
+  margin: 4px 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--danger);
+}
+.price-notice[hidden] { display: none; }
+
+.tag-warn { color: var(--danger); font-weight: 550; }
