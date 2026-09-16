@@ -1,2 +1,2 @@
 // Поддържа се от scripts/bump.py заедно с версията на кеша в sw.js
-export const APP_VERSION = '72';
+export const APP_VERSION = '73';

@@ -24,6 +24,34 @@ export async function exportView({ id }) {
   const actuated = new Set();
   for (const a of acts) for (const eid of a.entryIds || []) actuated.add(eid);
 
+  // Ако в този обект няма нищо, казваме къде всъщност са отчитанията,
+  // вместо да оставяме потребителя пред празен екран.
+  let elsewhere = '';
+  if (!entries.length) {
+    const everyEntry = await db.getAll('entries');
+    if (everyEntry.length) {
+      const allSites = await db.getAll('sites');
+      const nameById = new Map(allSites.map((x) => [x.id, x.name]));
+      const counts = new Map();
+      for (const e of everyEntry) counts.set(e.siteId, (counts.get(e.siteId) || 0) + 1);
+      const others = [...counts.entries()].filter(([sid]) => sid !== id);
+      if (others.length) {
+        elsewhere =
+          '<br><span class="muted small">Отчитания има в: ' +
+          others
+            .map(([sid, n]) =>
+              nameById.has(sid)
+                ? `<a href="#/sites/${sid}/export">${escapeHtml(nameById.get(sid))}</a> (${n})`
+                : `обект, който вече е изтрит (${n})`
+            )
+            .join(', ') +
+          '.</span>';
+      }
+    } else {
+      elsewhere = '<br><span class="muted small">В приложението още няма нито едно отчитане.</span>';
+    }
+  }
+
   const allReports = groupEntriesIntoReports(entries);
   const numberByKey = new Map(allReports.map((g, i) => [g.key, i + 1]));
   const reports = allReports
@@ -137,7 +165,7 @@ export async function exportView({ id }) {
       <h3 class="section-title">Отчитания ${openReports.length ? `(${openReports.length} неактувани)` : ''}</h3>
       ${reports.length
         ? reports.map(reportRow).join('')
-        : `<div class="empty">Няма отчитания по този обект.<br><span class="muted small">Първо отчети извършени работи, после се връщаш тук да издадеш акт.</span><br><a class="btn btn-primary btn-sm" href="#/sites/${id}/report">📝 Отчети изпълнени работи</a></div>`}
+        : `<div class="empty">Няма отчитания по този обект.<br><span class="muted small">Първо отчети извършени работи, после се връщаш тук да издадеш акт.</span>${elsewhere}<br><a class="btn btn-primary btn-sm" href="#/sites/${id}/report">📝 Отчети изпълнени работи</a></div>`}
       ${reports.length ? `<div class="quick-actions">
         <button type="button" class="btn btn-ghost btn-sm" id="pick-all">Избери всички</button>
         <button type="button" class="btn btn-ghost btn-sm" id="pick-none">Изчисти</button>
