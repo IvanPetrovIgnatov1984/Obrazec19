@@ -125,6 +125,11 @@ export async function batchReportView({ id }, query) {
     }
   }
 
+  // Позициите, по които още има неотчетено количество — за отчитане наведнъж.
+  const remainingPositions = positions
+    .map((p) => ({ position: p, left: remainingOf(p) }))
+    .filter((x) => x.left != null && x.left > 0);
+
   const people = await getPeople();
   const technicianLabel = site.role === 'client' ? 'Отчита (за Възложителя)' : 'Отчита (за Изпълнителя)';
 
@@ -150,6 +155,7 @@ export async function batchReportView({ id }, query) {
       <h3 class="section-title">Ново отчитане <span id="rows-count" class="muted"></span></h3>
       <div id="rows-container"></div>
       <button type="button" id="add-row-btn" class="btn btn-add-more">+ Добави още СМР</button>
+      ${remainingPositions.length ? `<button type="button" id="fill-all-btn" class="btn btn-ghost btn-block">Отчети всичко останало по количествената сметка (${remainingPositions.length})</button>` : ''}
 
       ${personFieldHtml({ label: technicianLabel, list: people.list, last: people.last })}
       <label>Бележка
@@ -406,6 +412,32 @@ export async function batchReportView({ id }, query) {
         });
         refreshSummary();
         return rowEl;
+      }
+
+      // Позиция, която вече е в някой ред — да не се дублира.
+      function rowTaken(positionId) {
+        return !!rowsContainer.querySelector('.work-row[data-key="pos:' + positionId + '"]');
+      }
+
+      const fillAllBtn = app.querySelector('#fill-all-btn');
+      if (fillAllBtn) {
+        fillAllBtn.addEventListener('click', () => {
+          // Празният първи ред се ползва, за останалите се добавят нови.
+          let firstEmpty = rowsContainer.querySelector('.work-row:not([data-key])');
+          for (const { position, left } of remainingPositions) {
+            if (rowTaken(position.id)) continue;
+            const rowEl = firstEmpty || addRow();
+            firstEmpty = null;
+            choose(rowEl, 'pos:' + position.id);
+            const qtyEl = rowEl.querySelector('.row-qty');
+            if (qtyEl) {
+              qtyEl.value = left;
+              qtyEl.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+          }
+          fillAllBtn.hidden = true;
+          refreshSummary();
+        });
       }
 
       app.querySelector('#add-row-btn').addEventListener('click', () => {
