@@ -1,4 +1,4 @@
-const CACHE_NAME = 'obrazec19-v80';
+const CACHE_NAME = 'obrazec19-v81';
 
 // Файловете на приложението — винаги се теглят от мрежата, когато има връзка,
 // и се кешират само за офлайн работа. Така стар код не може да „залепне“.
@@ -67,8 +67,13 @@ function networkFirst(req) {
       const cached = await caches.match(req);
       if (cached) finish(cached);
     }, 4000);
-    // При навигация fetch не приема допълнителни настройки.
-    const net = req.mode === 'navigate' ? fetch(req) : fetch(req, { cache: 'no-store' });
+    // Покрай кеша на браузъра (GitHub Pages го пази 10 минути) — иначе след
+    // качване се сервира стар код. Навигацията не приема настройки, затова за
+    // нея правим нова заявка по адреса; ако сървърът пренасочи, ползваме оригинала.
+    const net =
+      req.mode === 'navigate'
+        ? fetch(req.url, { cache: 'no-store', credentials: 'same-origin' }).then((r) => (r.redirected ? fetch(req) : r))
+        : fetch(req, { cache: 'no-store' });
     net
       .then((res) => {
         clearTimeout(timer);

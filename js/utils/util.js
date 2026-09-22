@@ -208,6 +208,16 @@ export async function forceUpdate() {
     return false;
   }
   try {
+    // Опресняваме кеша на браузъра за всеки файл на приложението. Без това до
+    // 10 минути след качване страницата може да тръгне нова, а кодът — стар.
+    // Списъкът е в sw.js, за да не се поддържа на две места.
+    const swText = await (await fetch('./sw.js', { cache: 'reload' })).text();
+    const files = [...new Set((swText.match(/'\.\/[^']*'/g) || []).map((x) => x.slice(1, -1)))];
+    await Promise.all(files.map((f) => fetch(f, { cache: 'reload' }).catch(() => null)));
+  } catch (err) {
+    console.error('Опресняването на файловете се провали', err);
+  }
+  try {
     if ('serviceWorker' in navigator) {
       const regs = await navigator.serviceWorker.getRegistrations();
       await Promise.all(regs.map((r) => r.unregister()));

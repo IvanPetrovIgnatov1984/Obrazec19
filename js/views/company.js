@@ -63,34 +63,50 @@ export async function companyView() {
   return {
     html: layout({ title: 'Моята фирма', back: '/sites', body }),
     mount(app) {
-      const reload = () => {
-        navigate('/company');
-        window.dispatchEvent(new HashChangeEvent('hashchange'));
-      };
+      // Списъкът с хора се обновява на място. Пълно пречертаване на екрана би
+      // изтрило незаписаното във формата на фирмата над него.
+      let list = people.list.slice();
+      const listEl = app.querySelector('#people-list');
+
+      function renderPeople() {
+        listEl.innerHTML = list.length
+          ? list
+              .map(
+                (n) => `
+            <div class="card person-row">
+              <span>${escapeHtml(n)}</span>
+              <button type="button" class="icon-btn-sm" data-del-person="${escapeHtml(n)}" aria-label="Премахни">🗑</button>
+            </div>`
+              )
+              .join('')
+          : '<div class="muted small">Още няма въведени имена.</div>';
+      }
+
+      listEl.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-del-person]');
+        if (!btn) return;
+        const name = btn.getAttribute('data-del-person');
+        if (!confirm(`Премахване на „${name}“ от списъка?\n\nВече записаните отчитания не се променят.`)) return;
+        await removePerson(name);
+        list = list.filter((n) => n !== name);
+        renderPeople();
+        toast('Премахнато');
+      });
 
       app.querySelector('#person-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const input = e.target.querySelector('[name=person]');
         const name = input.value.trim();
         if (!name) return;
-        if (people.list.some((n) => n.toLowerCase() === name.toLowerCase())) {
+        if (list.some((n) => n.toLowerCase() === name.toLowerCase())) {
           toast('Това име вече е в списъка');
           return;
         }
-        await savePeople([...people.list, name]);
+        list = [...list, name];
+        await savePeople(list);
         input.value = '';
+        renderPeople();
         toast('Добавено');
-        reload();
-      });
-
-      app.querySelectorAll('[data-del-person]').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const name = btn.getAttribute('data-del-person');
-          if (!confirm(`Премахване на „${name}“ от списъка?\n\nВече записаните отчитания не се променят.`)) return;
-          await removePerson(name);
-          toast('Премахнато');
-          reload();
-        });
       });
 
       const vatCheckbox = app.querySelector('[name=vatRegistered]');
