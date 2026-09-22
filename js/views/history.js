@@ -1,8 +1,8 @@
 import { db } from '../db.js';
 import { layout } from '../utils/layout.js';
-import { escapeHtml, fmtNum, toast } from '../utils/util.js';
+import { escapeHtml, fmtNum, fmtMoney, toast } from '../utils/util.js';
 import { navigate } from '../router.js';
-import { groupEntriesIntoReports, reportCardHtml, reportTotal, wireReportCards } from '../utils/reports.js';
+import { groupEntriesIntoReports, reportCardHtml, reportTotal, wireReportCards, issuedActsFor, blockedByActs } from '../utils/reports.js';
 
 export async function historyView({ id }, query) {
   const site = await db.get('sites', id);
@@ -57,7 +57,7 @@ export async function historyView({ id }, query) {
       </label>
       <button type="submit" class="btn btn-ghost">Филтър</button>
     </form>
-    ${reports.length ? `<div class="muted small">${reports.length} ${reports.length === 1 ? 'отчитане' : 'отчитания'}${totalValue ? ` · обща стойност <strong>${fmtNum(totalValue)} €</strong>` : ''}</div>` : ''}
+    ${reports.length ? `<div class="muted small">${reports.length} ${reports.length === 1 ? 'отчитане' : 'отчитания'}${totalValue ? ` · обща стойност <strong>${fmtMoney(totalValue)} €</strong>` : ''}</div>` : ''}
     ${reports.length ? cards : '<div class="empty">Няма отчитания за избрания период.</div>'}
   `;
 
@@ -83,6 +83,11 @@ export async function historyView({ id }, query) {
 
       wireReportCards(app, {
         onDeleteEntry: async (entryId) => {
+          const blocking = await issuedActsFor(id, [entryId]);
+          if (blocking.length) {
+            alert(blockedByActs(blocking, 'Този ред е'));
+            return;
+          }
           if (!confirm('Изтриване на реда от отчитането?')) return;
           await db.deleteByIndex('photos', 'entryId', entryId);
           await db.delete('entries', entryId);
@@ -92,6 +97,11 @@ export async function historyView({ id }, query) {
         onDeleteReport: async (key) => {
           const group = reports.find((g) => g.key === key);
           if (!group) return;
+          const blocking = await issuedActsFor(id, group.entries.map((e) => e.id));
+          if (blocking.length) {
+            alert(blockedByActs(blocking, 'Това отчитане е'));
+            return;
+          }
           if (!confirm(`Изтриване на цялото отчитане (${group.entries.length} реда)? Действието е необратимо.`)) return;
           for (const e of group.entries) {
             await db.deleteByIndex('photos', 'entryId', e.id);

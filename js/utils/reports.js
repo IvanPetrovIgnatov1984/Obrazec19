@@ -1,6 +1,7 @@
 // Едно отчитане = редовете, записани заедно с едно „Потвърди“ (общ reportId).
 // По-старите записи нямат reportId — групират се по дата, за да не се губят.
-import { escapeHtml, fmtNum, fmtDate } from './util.js';
+import { escapeHtml, fmtNum, fmtMoney, fmtDate } from './util.js';
+import { db } from '../db.js';
 
 export function groupEntriesIntoReports(entries) {
   const map = new Map();
@@ -38,7 +39,7 @@ function lineHtml(e, posById) {
     <div class="report-line">
       <div class="site-card-top">
         <span class="small">${escapeHtml(p ? p.description : 'Изтрита позиция')}</span>
-        <span class="muted small nowrap">${fmtNum(e.qty)} ${escapeHtml(unit)}${value ? ' · ' + fmtNum(value) + ' €' : ''}</span>
+        <span class="muted small nowrap">${fmtNum(e.qty)} ${escapeHtml(unit)}${value ? ' · ' + fmtMoney(value) + ' €' : ''}</span>
       </div>
       ${detail ? `<div class="muted small">${detail}</div>` : ''}
       <button type="button" class="btn btn-danger-ghost btn-sm" data-del-entry="${e.id}">Изтрий реда</button>
@@ -58,7 +59,7 @@ export function reportCardHtml(group, { posById, index, open = false, showDate =
         <span class="report-caret">${open ? '▾' : '▸'}</span>
         <span class="report-title">
           <strong class="small">Отчитане №${index}${showDate ? ' · ' + fmtDate(group.date) : ''}</strong>
-          <span class="muted small">${worksLabel}${total ? ' · ' + fmtNum(total) + ' €' : ''}</span>
+          <span class="muted small">${worksLabel}${total ? ' · ' + fmtMoney(total) + ' €' : ''}</span>
         </span>
       </button>
       <div class="report-body"${open ? '' : ' hidden'}>
@@ -66,7 +67,7 @@ export function reportCardHtml(group, { posById, index, open = false, showDate =
         ${first.technician ? `<div class="muted small">Отчел: ${escapeHtml(first.technician)}</div>` : ''}
         ${first.note ? `<div class="muted small">Бележка: ${escapeHtml(first.note)}</div>` : ''}
         ${photoCount ? `<div class="muted small">📷 ${photoCount} снимки</div>` : ''}
-        ${total ? `<div class="muted small">Общо за отчитането: <strong>${fmtNum(total)} €</strong></div>` : ''}
+        ${total ? `<div class="muted small">Общо за отчитането: <strong>${fmtMoney(total)} €</strong></div>` : ''}
         <button type="button" class="btn btn-danger-ghost btn-sm" data-del-report="${escapeHtml(group.key)}">🗑 Изтрий цялото отчитане</button>
       </div>
     </div>
@@ -98,4 +99,27 @@ export function wireReportCards(app, { onDeleteEntry, onDeleteReport }) {
       });
     });
   }
+}
+
+// Издадените актове, в които влиза поне един от дадените редове.
+// Фактурираното не се трие тихо: първо се трие актът, после редът.
+export async function issuedActsFor(siteId, entryIds) {
+  let acts = [];
+  try {
+    acts = await db.getAllByIndex('acts', 'siteId', siteId);
+  } catch (err) {
+    return [];
+  }
+  const wanted = new Set(entryIds);
+  return acts.filter((a) => (a.entryIds || []).some((x) => wanted.has(x))).sort((a, b) => (a.no || 0) - (b.no || 0));
+}
+
+// lead е началото на изречението, заедно с глагола: „Този ред е“, „…които са“.
+export function blockedByActs(acts, lead) {
+  const nos = acts.map((a) => '№ ' + a.no).join(', ');
+  return (
+    `${lead} в издаден Акт ${nos}.\n\n` +
+    'Издаденият акт е документ и не се променя. Ако наистина трябва да се махне, ' +
+    'първо изтрий акта в „Акт Образец 19“, а после този ред.'
+  );
 }

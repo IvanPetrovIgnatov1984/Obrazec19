@@ -1,7 +1,8 @@
 import { db, uid, today, deletePositionCascade } from '../db.js';
 import { layout } from '../utils/layout.js';
-import { escapeHtml, fmtNum, fmtDate, toast, getSetting, setSetting, fileToCompressedBlob } from '../utils/util.js';
+import { escapeHtml, fmtNum, fmtMoney, fmtDate, toast, getSetting, setSetting, fileToCompressedBlob } from '../utils/util.js';
 import { navigate } from '../router.js';
+import { issuedActsFor, blockedByActs } from '../utils/reports.js';
 import { getPeople, personFieldHtml, wirePersonField, rememberPerson } from '../utils/people.js';
 
 export async function positionDetailView({ id, posId }) {
@@ -26,7 +27,7 @@ export async function positionDetailView({ id, posId }) {
         <div class="card entry-card">
           <div class="site-card-top">
             <strong>${fmtDate(e.date)}</strong>
-            <span class="muted">${fmtNum(e.qty)} ${escapeHtml(position.unit || '')}${position.unitPrice ? ' · ' + fmtNum(value) + ' €' : ''}</span>
+            <span class="muted">${fmtNum(e.qty)} ${escapeHtml(position.unit || '')}${position.unitPrice ? ' · ' + fmtMoney(value) + ' €' : ''}</span>
           </div>
           ${e.factorA != null ? `<div class="muted small">${fmtNum(e.factorA)} ${escapeHtml(e.unitA || '')} × ${fmtNum(e.factorB)} ${escapeHtml(e.unitB || '')}</div>` : ''}
           ${e.coats > 1 ? `<div class="muted small">${fmtNum(e.baseQty)} ${escapeHtml(position.unit || '')} × ${e.coats} ръце</div>` : ''}
@@ -64,7 +65,7 @@ export async function positionDetailView({ id, posId }) {
         <button type="submit" class="btn btn-primary">Запази промените</button>
       </form>
       <div class="muted small">${fmtNum(done)} / ${fmtNum(planned)} ${escapeHtml(position.unit || '')} изпълнено</div>
-      ${position.unitPrice ? `<div class="muted small">Стойност: ${fmtNum(done * position.unitPrice)} / ${fmtNum(planned * position.unitPrice)} €</div>` : ''}
+      ${position.unitPrice ? `<div class="muted small">Стойност: ${fmtNum(done * position.unitPrice)} / ${fmtMoney(planned * position.unitPrice)} €</div>` : ''}
     </div>
     <a class="btn btn-primary btn-block" href="#/sites/${id}/positions/${posId}/report">+ Ново отчитане</a>
     <h3 class="section-title">История на отчитанията</h3>
@@ -95,8 +96,13 @@ export async function positionDetailView({ id, posId }) {
       });
       app.querySelectorAll('[data-del-entry]').forEach((btn) => {
         btn.addEventListener('click', async () => {
-          if (!confirm('Изтриване на отчитането?')) return;
           const entryId = btn.getAttribute('data-del-entry');
+          const blocking = await issuedActsFor(id, [entryId]);
+          if (blocking.length) {
+            alert(blockedByActs(blocking, 'Този ред е'));
+            return;
+          }
+          if (!confirm('Изтриване на отчитането?')) return;
           await db.deleteByIndex('photos', 'entryId', entryId);
           await db.delete('entries', entryId);
           toast('Изтрито');
@@ -105,6 +111,11 @@ export async function positionDetailView({ id, posId }) {
         });
       });
       app.querySelector('#delete-position-btn').addEventListener('click', async () => {
+        const blocking = await issuedActsFor(id, entries.map((x) => x.id));
+        if (blocking.length) {
+          alert(blockedByActs(blocking, 'Позицията има отчитания, които са'));
+          return;
+        }
         if (!confirm('Изтриване на позицията и всички нейни отчитания и снимки? Действието е необратимо.')) return;
         await deletePositionCascade(posId);
         toast('Позицията е изтрита');
@@ -152,7 +163,7 @@ export async function reportView({ id, posId }) {
     <div class="site-header">
       <h2>${escapeHtml(position.description)}</h2>
       <div class="muted small">Остават: ${fmtNum(remaining)} ${escapeHtml(position.unit || '')}</div>
-      ${position.unitPrice ? `<div class="muted small">Ед. цена: ${fmtNum(position.unitPrice)} €</div>` : ''}
+      ${position.unitPrice ? `<div class="muted small">Ед. цена: ${fmtMoney(position.unitPrice)} €</div>` : ''}
       ${compound ? `<div class="muted small">Разчита се различно за всеки етаж/участък — въведете количество и добавка ръчно всеки път.</div>` : ''}
     </div>
     <form id="report-form" class="form">
@@ -200,7 +211,7 @@ export async function reportView({ id, posId }) {
         const coats = compound ? 1 : getCoats();
         const base = parseFloat(app.querySelector('[name=qty]')?.value) || 0;
         const prefix = coats > 1 ? `${fmtNum(base)} × ${coats} ръце = ${fmtNum(qty)} ${position.unit} · ` : '';
-        valueEl.textContent = `${prefix}Стойност: ${fmtNum(qty * (Number(position.unitPrice) || 0))} €`;
+        valueEl.textContent = `${prefix}Стойност: ${fmtMoney(qty * (Number(position.unitPrice) || 0))} €`;
       };
 
       if (compound) {

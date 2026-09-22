@@ -1,7 +1,7 @@
 import { db, uid, today } from '../db.js';
 import { layout } from '../utils/layout.js';
-import { escapeHtml, fmtNum, fmtDate, toast } from '../utils/util.js';
-import { exportPdf, exportXlsx, sharePdf, shareXlsx, gatherData, computeTotals, resolveParties, advancePlan } from '../utils/exporters.js';
+import { escapeHtml, fmtNum, fmtMoney, fmtDate, toast } from '../utils/util.js';
+import { exportPdf, exportXlsx, sharePdf, shareXlsx, gatherData, computeTotals, resolveParties, advancePlan, composeActDocument } from '../utils/exporters.js';
 import { groupEntriesIntoReports, reportTotal } from '../utils/reports.js';
 
 export async function exportView({ id }) {
@@ -89,7 +89,7 @@ export async function exportView({ id }) {
     return `
       <div class="act-line${used ? ' used' : ''}">
         <span class="act-line-desc">${escapeHtml(p ? p.description : 'Изтрита позиция')}${used ? ' · вече актувано' : ''}</span>
-        <span class="muted small act-line-qty">${fmtNum(e.qty)} ${escapeHtml(unit)}${value ? ' · ' + fmtNum(value) + ' €' : ''}</span>
+        <span class="muted small act-line-qty">${fmtNum(e.qty)} ${escapeHtml(unit)}${value ? ' · ' + fmtMoney(value) + ' €' : ''}</span>
         ${detail ? `<span class="muted small act-line-detail">${detail}</span>` : ''}
       </div>
     `;
@@ -114,7 +114,7 @@ export async function exportView({ id }) {
           <input type="checkbox" class="report-pick" value="${escapeHtml(r.key)}" ${r.done ? 'disabled' : 'checked'} />
           <span class="act-report-text">
             <strong class="small">Отчитане №${r.no} · ${fmtDate(r.date)}</strong>
-            <span class="muted small">${shown.length} ${shown.length === 1 ? 'работа' : 'работи'} · ${fmtNum(r.done ? r.fullValue : r.value)} €${state}</span>
+            <span class="muted small">${shown.length} ${shown.length === 1 ? 'работа' : 'работи'} · ${fmtMoney(r.done ? r.fullValue : r.value)} €${state}</span>
             ${preview ? `<span class="muted small">${preview}</span>` : ''}
           </span>
         </label>
@@ -138,9 +138,9 @@ export async function exportView({ id }) {
         <div class="card act-card">
           <div class="site-card-top">
             <strong class="small">Акт № ${escapeHtml(String(a.no))} · ${fmtDate(a.date)}</strong>
-            <span class="muted small">${fmtNum(a.due)} €</span>
+            <span class="muted small">${fmtMoney(a.due)} €</span>
           </div>
-          <div class="muted small">${(a.entryIds || []).length} реда · СМР ${fmtNum(a.subtotal)} €${a.advance ? ' · аванс -' + fmtNum(a.advance) + ' €' : ''}</div>
+          <div class="muted small">${(a.entryIds || []).length} реда · СМР ${fmtMoney(a.subtotal)} €${a.advance ? ' · аванс -' + fmtMoney(a.advance) + ' €' : ''}</div>
           ${a.handedBy || a.acceptedBy ? `<div class="muted small">${a.handedBy ? 'Предал: ' + escapeHtml(a.handedBy) : ''}${a.handedBy && a.acceptedBy ? ' · ' : ''}${a.acceptedBy ? 'Приел: ' + escapeHtml(a.acceptedBy) : ''}</div>` : ''}
           <div class="quick-actions">
             <button type="button" class="btn btn-primary btn-sm" data-act-share="${a.id}">📤 Изпрати</button>
@@ -257,8 +257,10 @@ export async function exportView({ id }) {
 
       // Вече актуваното определя колко аванс е усвоен преди този акт.
       const priorActuatedValue = acts.reduce((sum, a) => sum + (Number(a.subtotal) || 0), 0);
+      const advanceUsed = acts.reduce((sum, a) => sum + (Number(a.advance) || 0), 0);
 
       let lastState = null;
+      let making = false;
       const boqEl = app.querySelector('#act-boq');
       const boqCountEl = app.querySelector('#boq-count');
       const priceWarnEl = app.querySelector('#price-warning');
@@ -293,17 +295,17 @@ export async function exportView({ id }) {
                 <span class="boq-no">${off ? '—' : n}</span>
                 <span class="boq-body">
                   <span class="boq-desc">${escapeHtml(r.position.code ? r.position.code + ' · ' : '')}${escapeHtml(r.position.description)}</span>
-                  <span class="muted small">${fmtNum(r.qty)} ${escapeHtml(r.position.unit || '')}${noPrice ? '' : ' × ' + fmtNum(r.unitPrice) + ' €'}${from ? ' · от ' + from : ''}</span>
+                  <span class="muted small">${fmtNum(r.qty)} ${escapeHtml(r.position.unit || '')}${noPrice ? '' : ' × ' + fmtMoney(r.unitPrice) + ' €'}${from ? ' · от ' + from : ''}</span>
                   ${noPrice ? `<span class="price-fix">
                       <span class="price-warn">Няма единична цена</span>
                       <input type="number" step="any" inputmode="decimal" class="boq-price" data-pos="${escapeHtml(r.position.id)}" placeholder="€ / ${escapeHtml(r.position.unit || '')}" />
                     </span>` : ''}
                 </span>
-                <span class="boq-value">${fmtNum(r.value)} €</span>
+                <span class="boq-value">${fmtMoney(r.value)} €</span>
               </label>`;
             })
             .join('') +
-          `<div class="boq-row boq-total"><span class="boq-no"></span><span class="boq-body"><strong>Общо</strong></span><span class="boq-value"><strong>${fmtNum(total)} €</strong></span></div>`;
+          `<div class="boq-row boq-total"><span class="boq-no"></span><span class="boq-body"><strong>Общо</strong></span><span class="boq-value"><strong>${fmtMoney(total)} €</strong></span></div>`;
 
         boqEl.querySelectorAll('.boq-pick').forEach((cb) => {
           cb.addEventListener('change', () => {
@@ -348,36 +350,46 @@ export async function exportView({ id }) {
           .filter((e) => candidateSet.has(e.id) && !excluded.has(e.positionId))
           .map((e) => e.id);
         const periodValue = rows.reduce((sum, r) => sum + r.value, 0);
-        const plan = advancePlan(site, { boqValue, periodValue, priorValue: priorActuatedValue });
+        const plan = advancePlan(site, { boqValue, periodValue, priorValue: priorActuatedValue, advanceUsed });
 
         if (!advanceTouched) advanceInput.value = plan.suggested ? plan.suggested.toFixed(2) : '';
 
         advanceInfo.textContent = plan.total
           ? plan.mode === 'percent'
-            ? `Аванс по обекта: ${plan.pct}% от ${fmtNum(boqValue)} € = ${fmtNum(plan.total)} €`
-            : `Аванс по обекта: ${fmtNum(plan.total)} €`
+            ? `Аванс по обекта: ${plan.pct}% от ${fmtMoney(boqValue)} € = ${fmtMoney(plan.total)} €`
+            : `Аванс по обекта: ${fmtMoney(plan.total)} €`
           : '';
         advanceHint.textContent = plan.total
-          ? `${plan.method === 'proportional' ? 'Пропорционално приспадане' : 'Приспадане до усвояване'} · усвоен в предишни актове: ${fmtNum(plan.usedBefore)} € · предложено сега: ${fmtNum(plan.suggested)} € · остатък: ${fmtNum(plan.remaining)} €`
+          ? `${plan.method === 'proportional' ? 'Пропорционално приспадане' : 'Приспадане до усвояване'} · усвоен в предишни актове: ${fmtMoney(plan.usedBefore)} € · предложено сега: ${fmtMoney(plan.suggested)} € · остатък: ${fmtMoney(plan.remaining)} €`
           : '';
 
         renderBoq(allRows);
 
         const advance = parseFloat(advanceInput.value) || 0;
         const totals = computeTotals(rows, izpalnitel.vatRegistered, advance);
-        app.querySelector('#sum-subtotal').textContent = fmtNum(totals.subtotal) + ' €';
-        app.querySelector('#sum-advance').textContent = (totals.advance ? '- ' : '') + fmtNum(totals.advance) + ' €';
-        app.querySelector('#sum-base').textContent = fmtNum(totals.taxBase) + ' €';
-        app.querySelector('#sum-vat').textContent = fmtNum(totals.vat) + ' €';
-        app.querySelector('#sum-due').textContent = fmtNum(totals.due) + ' €';
+        app.querySelector('#sum-subtotal').textContent = fmtMoney(totals.subtotal) + ' €';
+        app.querySelector('#sum-advance').textContent = (totals.advance ? '- ' : '') + fmtMoney(totals.advance) + ' €';
+        app.querySelector('#sum-base').textContent = fmtMoney(totals.taxBase) + ' €';
+        app.querySelector('#sum-vat').textContent = fmtMoney(totals.vat) + ' €';
+        app.querySelector('#sum-due').textContent = fmtMoney(totals.due) + ' €';
 
         lastState = { entryIds, totals, advance };
-        makeActBtn.disabled = !entryIds.length;
+        makeActBtn.disabled = making || !entryIds.length;
         return lastState;
       }
 
-      form.addEventListener('input', refreshSummary);
-      form.addEventListener('change', refreshSummary);
+      // Полетата вътре в количествената сметка на акта (цена на място, отметки)
+      // имат свои обработчици. Иначе всяко натискане пресъздава таблицата и
+      // полето, в което пишеш, изчезва след първата цифра.
+      const insideBoq = (e) => e.target && e.target.closest && e.target.closest('#act-boq');
+      form.addEventListener('input', (e) => {
+        if (insideBoq(e)) return;
+        refreshSummary();
+      });
+      form.addEventListener('change', (e) => {
+        if (insideBoq(e)) return;
+        refreshSummary();
+      });
       refreshSummary();
 
       app.querySelectorAll('.act-report-toggle').forEach((btn) => {
@@ -413,32 +425,56 @@ export async function exportView({ id }) {
       }
 
       makeActBtn.addEventListener('click', async () => {
-        const state = await refreshSummary();
-        if (!state.entryIds.length) {
-          toast('Избери поне едно отчитане');
-          return;
-        }
-        const { actNo, actDate, handedBy, acceptedBy } = actMeta();
-        const reportKeys = [...form.querySelectorAll('.report-pick:checked')].map((cb) => cb.value);
-        toast('Генериране на акта…');
+        // Второ натискане, докато първото още генерира PDF, би издало втори акт
+        // със същите отчитания.
+        if (making) return;
+        making = true;
+        makeActBtn.disabled = true;
+        let saved = false;
+        let actNo = null;
         try {
+          const state = await refreshSummary();
+          if (!state.entryIds.length) {
+            toast('Избери поне едно отчитане');
+            return;
+          }
+          const meta = actMeta();
+          actNo = meta.actNo;
+          if (acts.some((a) => Number(a.no) === Number(actNo))) {
+            alert(`Вече има издаден Акт № ${actNo}. Смени номера или изтрий стария акт.`);
+            return;
+          }
+          const reportKeys = [...form.querySelectorAll('.report-pick:checked')].map((cb) => cb.value);
+          toast('Генериране на акта…');
+          // Документът се съставя веднъж и се пази в акта — така повторното
+          // изтегляне дава точно издаденото, дори да се сменят цени после.
+          const snapshot = await composeActDocument(id, {
+            entryIds: state.entryIds,
+            advance: state.advance,
+            actNo,
+            actDate: meta.actDate,
+            handedBy: meta.handedBy,
+            acceptedBy: meta.acceptedBy,
+          });
           await db.put('acts', {
             id: uid(),
             siteId: id,
             no: actNo,
-            date: actDate,
-            handedBy,
-            acceptedBy,
+            date: meta.actDate,
+            handedBy: meta.handedBy,
+            acceptedBy: meta.acceptedBy,
             entryIds: state.entryIds,
             reportKeys,
-            advance: state.advance,
-            subtotal: state.totals.subtotal,
-            taxBase: state.totals.taxBase,
-            vat: state.totals.vat,
-            due: state.totals.due,
+            advance: snapshot.totals.advance,
+            subtotal: snapshot.totals.subtotal,
+            taxBase: snapshot.totals.taxBase,
+            vat: snapshot.totals.vat,
+            due: snapshot.totals.due,
+            snapshot,
             createdAt: Date.now(),
           });
-          const how = await sharePdf(id, { entryIds: state.entryIds, advance: state.advance, actNo, actDate, handedBy, acceptedBy });
+          saved = true;
+          const how = await sharePdf(id, { snapshot });
           toast(
             how === 'shared'
               ? `Акт № ${actNo} е издаден и изпратен`
@@ -446,10 +482,20 @@ export async function exportView({ id }) {
               ? `Акт № ${actNo} е издаден`
               : `Акт № ${actNo} е издаден и свален`
           );
-          navigate();
         } catch (err) {
           console.error(err);
-          alert('Актът не беше съставен.\n\n' + String((err && err.message) || err));
+          alert(
+            saved
+              ? `Акт № ${actNo} е записан, но файлът не се генерира. Изпрати го от „Издадени актове“.\n\n` +
+                  String((err && err.message) || err)
+              : 'Актът не беше съставен.\n\n' + String((err && err.message) || err)
+          );
+        } finally {
+          if (saved) navigate();
+          else {
+            making = false;
+            makeActBtn.disabled = !(lastState && lastState.entryIds && lastState.entryIds.length);
+          }
         }
       });
 
@@ -468,6 +514,20 @@ export async function exportView({ id }) {
         }
       });
 
+      // Издаден акт се печата от снимката си. По-стари актове без снимка се
+      // сглобяват наново — с всичките им полета, включително имената.
+      function actSource(act) {
+        if (act.snapshot) return { snapshot: act.snapshot };
+        return {
+          entryIds: act.entryIds,
+          advance: act.advance,
+          actNo: act.no,
+          actDate: act.date,
+          handedBy: act.handedBy,
+          acceptedBy: act.acceptedBy,
+        };
+      }
+
       function navigate() {
         window.location.hash = `#/sites/${id}/export`;
         window.dispatchEvent(new HashChangeEvent('hashchange'));
@@ -479,12 +539,7 @@ export async function exportView({ id }) {
           if (!act) return;
           btn.disabled = true;
           try {
-            const how = await sharePdf(id, {
-              entryIds: act.entryIds,
-              advance: act.advance,
-              actNo: act.no,
-              actDate: act.date,
-            });
+            const how = await sharePdf(id, actSource(act));
             if (how === 'downloaded') toast('Устройството не поддържа изпращане — файлът е свален');
           } catch (err) {
             console.error(err);
@@ -499,14 +554,14 @@ export async function exportView({ id }) {
           const act = acts.find((a) => a.id === btn.getAttribute('data-act-pdf'));
           if (!act) return;
           toast('Генериране…');
-          await exportPdf(id, { entryIds: act.entryIds, advance: act.advance, actNo: act.no, actDate: act.date, handedBy: act.handedBy, acceptedBy: act.acceptedBy });
+          await exportPdf(id, actSource(act));
         });
       });
       app.querySelectorAll('[data-act-xlsx]').forEach((btn) => {
         btn.addEventListener('click', async () => {
           const act = acts.find((a) => a.id === btn.getAttribute('data-act-xlsx'));
           if (!act) return;
-          await exportXlsx(id, { entryIds: act.entryIds, advance: act.advance, actNo: act.no, actDate: act.date, handedBy: act.handedBy, acceptedBy: act.acceptedBy });
+          await exportXlsx(id, actSource(act));
         });
       });
       app.querySelectorAll('[data-act-del]').forEach((btn) => {

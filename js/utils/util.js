@@ -11,6 +11,17 @@ export function fmtNum(n) {
   return num.toLocaleString('bg-BG', { maximumFractionDigits: 2 });
 }
 
+// Пари — винаги с два знака след запетаята, както се пише в акт.
+export function fmtMoney(n) {
+  const num = Number(n) || 0;
+  return num.toLocaleString('bg-BG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Закръгляне до цент без грешката на плаващата запетая (1.005 → 1.01).
+export function round2(x) {
+  return Math.round((Number(x) + Number.EPSILON) * 100) / 100;
+}
+
 export function fmtDate(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
@@ -157,4 +168,71 @@ function shareSheet(blob, filename, { title = '', text = '' } = {}) {
       });
     });
   });
+}
+
+// Има ли на екрана въведено, но незаписано нещо — количества, текст, снимки.
+// Полетата за търсене и дата не се броят: те не са работа, която да се загуби.
+export function hasUnsavedInput(root = document) {
+  const app = root.getElementById ? root.getElementById('app') : null;
+  if (!app) return false;
+  if (app.querySelector('#photo-list img')) return true;
+  return [...app.querySelectorAll('input, textarea')].some((el) => {
+    const t = el.type;
+    if (t === 'search' || t === 'date' || t === 'hidden' || t === 'file' || t === 'checkbox' || t === 'radio') return false;
+    return el.value !== el.defaultValue;
+  });
+}
+
+// Има ли реално връзка — navigator.onLine лъже при „свързан към Wi-Fi без интернет“.
+async function reachable(ms = 5000) {
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = setTimeout(() => ctrl && ctrl.abort(), ms);
+  try {
+    const res = await fetch('./js/version.js?probe=' + Date.now(), { cache: 'no-store', signal: ctrl && ctrl.signal });
+    return res.ok;
+  } catch (err) {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Изчиства кеша и зарежда най-новата версия. Без мрежа НЕ прави нищо —
+// иначе приложението остава без офлайн копие и не се отваря на обекта.
+export async function forceUpdate() {
+  if (hasUnsavedInput() && !confirm('На екрана има незаписано въвеждане. Обновяването ще го изчисти. Да продължа ли?')) {
+    return false;
+  }
+  if (!(await reachable())) {
+    alert('Няма връзка с интернет.\n\nПриложението продължава да работи офлайн. Обнови го, когато имаш мрежа.');
+    return false;
+  }
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch (err) {
+    console.error('Изчистването на кеша се провали', err);
+  }
+  location.href = location.pathname + '?_r=' + Date.now() + location.hash;
+  return true;
+}
+
+// Лента „има нова версия“ — вместо да презареждаме посред отчитане.
+export function showUpdateBar() {
+  if (document.getElementById('update-bar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'update-bar';
+  bar.className = 'update-bar';
+  bar.innerHTML = '<span>Има нова версия.</span><button type="button" class="btn btn-primary btn-sm">Обнови, когато приключиш</button>';
+  bar.querySelector('button').addEventListener('click', () => {
+    if (hasUnsavedInput() && !confirm('На екрана има незаписано въвеждане. Да обновя ли все пак?')) return;
+    location.reload();
+  });
+  document.body.appendChild(bar);
 }

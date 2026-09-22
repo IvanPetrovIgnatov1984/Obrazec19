@@ -16,11 +16,11 @@ fi
 if ! git remote get-url origin > /dev/null 2>&1; then
   echo
   echo "Хранилището още не е свързано с GitHub. Изпълни веднъж:"
-  echo "  git remote add origin https://github.com/IvanPetrovIgnatov1984/obrazec19.git"
+  echo "  git remote add origin https://github.com/IvanPetrovIgnatov1984/Obrazec19.git"
   exit 1
 fi
 
 git push -u origin main
 echo
 echo "Готово. След около минута новата версия е на:"
-echo "  https://ivanpetrovignatov1984.github.io/obrazec19/"
+echo "  https://ivanpetrovignatov1984.github.io/Obrazec19/"

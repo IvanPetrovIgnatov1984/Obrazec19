@@ -1,6 +1,6 @@
 import { db, uid, deleteSiteCascade } from '../db.js';
 import { layout } from '../utils/layout.js';
-import { escapeHtml, fmtNum, toast, getSetting } from '../utils/util.js';
+import { escapeHtml, fmtNum, toast, getSetting, forceUpdate } from '../utils/util.js';
 import { navigate } from '../router.js';
 import { APP_VERSION } from '../version.js';
 import { exportBackup, importBackup, describeCounts } from '../utils/backup.js';
@@ -26,9 +26,19 @@ export async function listView() {
     sites.map(async (s) => {
       const positions = await db.getAllByIndex('positions', 'siteId', s.id);
       const entries = await db.getAllByIndex('entries', 'siteId', s.id);
-      const planned = positions.reduce((sum, p) => sum + (Number(p.plannedQty) || 0), 0);
-      const done = entries.reduce((sum, e) => sum + (Number(e.qty) || 0), 0);
-      const pct = planned > 0 ? Math.min(100, Math.round((done / planned) * 100)) : 0;
+      // Изпълнението се мери по стойност: м2, м3 и бройки не могат да се събират.
+      // Работа извън КС (планирано 0) не вдига процента.
+      const doneByPos = new Map();
+      for (const e of entries) doneByPos.set(e.positionId, (doneByPos.get(e.positionId) || 0) + (Number(e.qty) || 0));
+      const inPlan = positions.filter((p) => (Number(p.plannedQty) || 0) > 0);
+      const weight = (p) => (Number(p.plannedQty) || 0) * (Number(p.unitPrice) || 0);
+      const totalWeight = inPlan.reduce((sum, p) => sum + weight(p), 0);
+      const share = (p) => Math.min(1, (doneByPos.get(p.id) || 0) / (Number(p.plannedQty) || 1));
+      const pct = !inPlan.length
+        ? 0
+        : totalWeight > 0
+        ? Math.round((inPlan.reduce((sum, p) => sum + share(p) * weight(p), 0) / totalWeight) * 100)
+        : Math.round((inPlan.reduce((sum, p) => sum + share(p), 0) / inPlan.length) * 100);
       const isClient = s.role === 'client';
       const vazlozhitel = isClient ? myCompanyName : s.clientName || '—';
       const izpalnitel = isClient ? s.clientName || '—' : myCompanyName;
@@ -134,21 +144,7 @@ export async function listView() {
         fileInput.value = '';
       });
 
-      app.querySelector('#force-update').addEventListener('click', async () => {
-        try {
-          if ('serviceWorker' in navigator) {
-            const regs = await navigator.serviceWorker.getRegistrations();
-            await Promise.all(regs.map((r) => r.unregister()));
-          }
-          if ('caches' in window) {
-            const keys = await caches.keys();
-            await Promise.all(keys.map((k) => caches.delete(k)));
-          }
-        } catch (err) {
-          console.error(err);
-        }
-        window.location.href = window.location.pathname + '?_u=' + Date.now();
-      });
+      app.querySelector('#force-update').addEventListener('click', () => forceUpdate());
 
       app.querySelectorAll('[data-del-site]').forEach((btn) => {
         btn.addEventListener('click', async (e) => {

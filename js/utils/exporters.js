@@ -1,5 +1,5 @@
 import { db } from '../db.js';
-import { fmtDate, fmtNum, getSetting, shareOrDownload, downloadBlob } from './util.js';
+import { fmtDate, fmtNum, fmtMoney, round2, getSetting, shareOrDownload, downloadBlob } from './util.js';
 import { ROBOTO_REGULAR_B64, ROBOTO_BOLD_B64 } from '../../vendor/fonts/roboto-fonts.js';
 
 const VAT_RATE = 0.2;
@@ -50,7 +50,7 @@ export async function gatherData(siteId, opts = {}) {
     .map((p) => {
       const qty = qtyByPosition.get(p.id) || 0;
       const unitPrice = Number(p.unitPrice) || 0;
-      return { position: p, qty, unitPrice, value: qty * unitPrice };
+      return { position: p, qty, unitPrice, value: round2(qty * unitPrice) };
     });
 
   return { site, myCompany, positions, entries, rows, boqValue, priorValue, periodValue, periodFrom, periodTo, valueOf, allEntries };
@@ -59,40 +59,44 @@ export async function gatherData(siteId, opts = {}) {
 // Моделът на Образец 19: усвоеният аванс се приспада от стойността на СМР,
 // а ДДС се начислява върху разликата (данъчната основа) — авансът вече е фактуриран с ДДС.
 export function computeTotals(rows, izpalnitelVatRegistered, advanceDeducted) {
-  const subtotal = rows.reduce((sum, r) => sum + r.value, 0);
-  const advance = Math.max(0, Math.min(Number(advanceDeducted) || 0, subtotal));
-  const taxBase = subtotal - advance;
-  const vat = izpalnitelVatRegistered ? taxBase * VAT_RATE : 0;
-  const due = taxBase + vat;
-  const total = subtotal + (izpalnitelVatRegistered ? subtotal * VAT_RATE : 0);
+  // Всичко до цент: сборът на отпечатаните редове трябва да дава отпечатаната сума.
+  const subtotal = round2(rows.reduce((sum, r) => sum + r.value, 0));
+  const advance = round2(Math.max(0, Math.min(Number(advanceDeducted) || 0, subtotal)));
+  const taxBase = round2(subtotal - advance);
+  const vat = izpalnitelVatRegistered ? round2(taxBase * VAT_RATE) : 0;
+  const due = round2(taxBase + vat);
+  const total = round2(subtotal + (izpalnitelVatRegistered ? subtotal * VAT_RATE : 0));
   return { subtotal, advance, taxBase, vat, due, total };
 }
 
 // Колко аванс се приспада от този акт според настройките на обекта.
 // mode: 'amount' (фиксирана сума) | 'percent' (процент от количествената сметка)
 // method: 'proportional' (същият процент от всеки акт) | 'exhaust' (изцяло, докато се усвои)
-export function advancePlan(site, { boqValue = 0, periodValue = 0, priorValue = 0 } = {}) {
+export function advancePlan(site, { boqValue = 0, periodValue = 0, priorValue = 0, advanceUsed = null } = {}) {
   const mode = site.advanceMode || 'amount';
   const pct = Number(site.advancePercent) || 0;
   const total = mode === 'percent' ? (boqValue * pct) / 100 : Number(site.advanceAmount) || 0;
   const method = site.advanceMethod || (mode === 'percent' ? 'proportional' : 'exhaust');
   if (!total) return { total: 0, suggested: 0, usedBefore: 0, remaining: 0, mode, pct, method };
 
+  // Ако знаем колко реално е приспаднато в издадените актове, ползваме това —
+  // потребителят може да е въвел друга сума от предложената.
+  const known = advanceUsed != null && Number.isFinite(Number(advanceUsed));
   let usedBefore;
   let suggested;
   if (method === 'proportional') {
     const rate = mode === 'percent' ? pct / 100 : boqValue ? total / boqValue : 0;
-    usedBefore = Math.min(total, priorValue * rate);
+    usedBefore = known ? Math.min(total, Number(advanceUsed)) : Math.min(total, priorValue * rate);
     suggested = Math.min(total - usedBefore, periodValue * rate);
   } else {
-    usedBefore = Math.min(total, priorValue);
+    usedBefore = known ? Math.min(total, Number(advanceUsed)) : Math.min(total, priorValue);
     suggested = Math.min(total - usedBefore, periodValue);
   }
   return {
-    total,
-    suggested: Math.max(0, suggested),
-    usedBefore: Math.max(0, usedBefore),
-    remaining: Math.max(0, total - usedBefore - suggested),
+    total: round2(total),
+    suggested: round2(Math.max(0, suggested)),
+    usedBefore: round2(Math.max(0, usedBefore)),
+    remaining: round2(Math.max(0, total - usedBefore - suggested)),
     mode,
     pct,
     method,
@@ -134,14 +138,51 @@ export function resolveParties(site, myCompany) {
     : { vazlojitel: counterparty, izpalnitel: company };
 }
 
-async function buildPdf(siteId, opts = {}) {
+// Документът на акта — всичко, което се печата, изчислено веднъж.
+// При издаване се пази в самия акт, за да не се мени издаденото, ако после
+// се сменят цени или се пипат отчитания.
+export async function composeActDocument(siteId, opts = {}) {
   const { advance, actNo, actDate, handedBy, acceptedBy } = opts;
   const data = await gatherData(siteId, opts);
   const { site, myCompany, rows, periodFrom, periodTo } = data;
-  const from = periodFrom;
-  const to = periodTo;
-  const { vazlojitel, izpalnitel } = resolveParties(site, myCompany);
-  const totals = computeTotals(rows, izpalnitel.vatRegistered, advance);
+  const parties = resolveParties(site, myCompany);
+  const totals = computeTotals(rows, parties.izpalnitel.vatRegistered, advance);
+  return {
+    version: 1,
+    site: { name: site.name || '', address: site.address || '' },
+    parties,
+    rows: rows.map((r) => ({
+      code: r.position.code || '',
+      description: r.position.description || '',
+      unit: r.position.unit || '',
+      qty: r.qty,
+      unitPrice: r.unitPrice,
+      value: r.value,
+    })),
+    totals,
+    periodFrom: periodFrom || '',
+    periodTo: periodTo || '',
+    actNo: actNo || null,
+    actDate: actDate || '',
+    handedBy: handedBy || '',
+    acceptedBy: acceptedBy || '',
+  };
+}
+
+// Издаден акт със снимка се печата от снимката; по-старите актове без снимка — наново.
+async function documentFor(siteId, opts = {}) {
+  return opts.snapshot || composeActDocument(siteId, opts);
+}
+
+function fileBase(d) {
+  return `Akt-Obrazec19${d.actNo ? '-N' + d.actNo : ''}-${(d.site.name || 'obekt').replace(/[^\p{L}\p{N}]+/gu, '_')}`;
+}
+
+function renderPdf(d) {
+  const { site, parties, rows, totals, actNo, actDate, handedBy, acceptedBy } = d;
+  const { vazlojitel, izpalnitel } = parties;
+  const from = d.periodFrom;
+  const to = d.periodTo;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   registerFonts(doc);
@@ -202,32 +243,35 @@ async function buildPdf(siteId, opts = {}) {
   doc.text(`Период: ${from ? fmtDate(from) : '—'} до ${to ? fmtDate(to) : '—'}`, marginX, y);
   y += 22;
 
-  const colX = { n: marginX, desc: marginX + 24, unit: marginX + 300, qty: marginX + 350, price: marginX + 410, total: marginX + 480 };
-  doc.setFont('Roboto', 'bold');
-  doc.text('N', colX.n, y);
-  doc.text('описание на извършените СМР', colX.desc, y);
-  doc.text('мярка', colX.unit, y);
-  doc.text('кол-во', colX.qty, y);
-  doc.text('ед.цена', colX.price, y);
-  doc.text('общо', colX.total, y);
-  doc.setFont('Roboto', 'normal');
-  y += 6;
-  doc.line(marginX, y, pageWidth, y);
-  y += 14;
+  const colX = { n: marginX, desc: marginX + 24, unit: marginX + 290, qty: marginX + 335, price: marginX + 400, total: pageWidth };
+  const header = () => {
+    doc.setFont('Roboto', 'bold');
+    doc.text('N', colX.n, y);
+    doc.text('описание на извършените СМР', colX.desc, y);
+    doc.text('мярка', colX.unit, y);
+    doc.text('кол-во', colX.qty, y);
+    doc.text('ед.цена', colX.price, y);
+    doc.text('общо', colX.total, y, { align: 'right' });
+    doc.setFont('Roboto', 'normal');
+    y += 6;
+    doc.line(marginX, y, pageWidth, y);
+    y += 14;
+  };
+  header();
 
   rows.forEach((r, i) => {
     if (y > 780) {
       doc.addPage();
       y = 50;
+      header();
     }
-    const p = r.position;
-    const desc = `${p.code ? p.code + ' ' : ''}${p.description}`;
+    const desc = `${r.code ? r.code + ' ' : ''}${r.description}`;
     doc.text(String(i + 1), colX.n, y);
     doc.text(truncate(desc, 40), colX.desc, y);
-    doc.text(p.unit || '', colX.unit, y);
+    doc.text(r.unit || '', colX.unit, y);
     doc.text(fmtNum(r.qty), colX.qty, y);
-    doc.text(fmtNum(r.unitPrice), colX.price, y);
-    doc.text(fmtNum(r.value), colX.total, y);
+    doc.text(fmtMoney(r.unitPrice), colX.price, y);
+    doc.text(fmtMoney(r.value), colX.total, y, { align: 'right' });
     y += 16;
   });
 
@@ -254,58 +298,43 @@ async function buildPdf(siteId, opts = {}) {
   const sumValueX = pageWidth;
   doc.setFontSize(10);
   doc.text('Стойност на СМР:', sumLabelX, sy);
-  doc.text(fmtNum(totals.subtotal) + ' €', sumValueX, sy, { align: 'right' });
+  doc.text(fmtMoney(totals.subtotal) + ' €', sumValueX, sy, { align: 'right' });
   sy += 18;
   if (totals.advance) {
     doc.text('Приспаднат аванс:', sumLabelX, sy);
-    doc.text('- ' + fmtNum(totals.advance) + ' €', sumValueX, sy, { align: 'right' });
+    doc.text('- ' + fmtMoney(totals.advance) + ' €', sumValueX, sy, { align: 'right' });
     sy += 18;
     doc.text('Данъчна основа:', sumLabelX, sy);
-    doc.text(fmtNum(totals.taxBase) + ' €', sumValueX, sy, { align: 'right' });
+    doc.text(fmtMoney(totals.taxBase) + ' €', sumValueX, sy, { align: 'right' });
     sy += 18;
   }
   doc.text('ДДС (20%):', sumLabelX, sy);
-  doc.text(fmtNum(totals.vat) + ' €', sumValueX, sy, { align: 'right' });
+  doc.text(fmtMoney(totals.vat) + ' €', sumValueX, sy, { align: 'right' });
   sy += 18;
   doc.setFont('Roboto', 'bold');
   doc.text('Дължимо за плащане:', sumLabelX, sy);
-  doc.text(fmtNum(totals.due) + ' €', sumValueX, sy, { align: 'right' });
+  doc.text(fmtMoney(totals.due) + ' €', sumValueX, sy, { align: 'right' });
   doc.setFont('Roboto', 'normal');
 
-  const filename = `Akt-Obrazec19${actNo ? '-N' + actNo : ''}-${site.name.replace(/[^\p{L}\p{N}]+/gu, '_')}.pdf`;
   return {
     blob: doc.output('blob'),
-    filename,
+    filename: fileBase(d) + '.pdf',
     title: `Акт Образец 19${actNo ? ' № ' + actNo : ''} — ${site.name}`,
-    text: `Акт Образец 19${actNo ? ' № ' + actNo : ''} за обект „${site.name}“ — период ${from ? fmtDate(from) : '—'} до ${to ? fmtDate(to) : '—'}. Дължимо за плащане: ${fmtNum(totals.due)} €.`,
+    text: `Акт Образец 19${actNo ? ' № ' + actNo : ''} за обект „${site.name}“ — период ${from ? fmtDate(from) : '—'} до ${to ? fmtDate(to) : '—'}. Дължимо за плащане: ${fmtMoney(totals.due)} €.`,
   };
 }
 
-export async function exportPdf(siteId, opts = {}) {
-  const { blob, filename } = await buildPdf(siteId, opts);
-  downloadBlob(blob, filename);
-}
-
-// Отваря листа за споделяне на телефона; на компютър просто сваля файла.
-export async function sharePdf(siteId, opts = {}) {
-  const { blob, filename, title, text } = await buildPdf(siteId, opts);
-  return shareOrDownload(blob, filename, { title, text });
-}
-
-async function buildXlsx(siteId, opts = {}) {
-  const { advance, actNo, actDate, handedBy, acceptedBy } = opts;
-  const data = await gatherData(siteId, opts);
-  const { site, myCompany, rows, periodFrom, periodTo } = data;
-  const from = periodFrom;
-  const to = periodTo;
-  const { vazlojitel, izpalnitel } = resolveParties(site, myCompany);
-  const totals = computeTotals(rows, izpalnitel.vatRegistered, advance);
+function renderXlsx(d) {
+  const { site, parties, rows, totals, actNo, actDate, handedBy, acceptedBy } = d;
+  const { vazlojitel, izpalnitel } = parties;
+  const from = d.periodFrom;
+  const to = d.periodTo;
 
   const detailRows = rows.map((r, i) => ({
     'N': i + 1,
-    'Код': r.position.code || '',
-    'Описание на извършените СМР': r.position.description,
-    'Мярка': r.position.unit || '',
+    'Код': r.code || '',
+    'Описание на извършените СМР': r.description,
+    'Мярка': r.unit || '',
     'Количество': r.qty,
     'Ед. цена': r.unitPrice,
     'Общо': r.value,
@@ -331,23 +360,33 @@ async function buildXlsx(siteId, opts = {}) {
   const wb = window.XLSX.utils.book_new();
   window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(detailRows), 'СМР');
   window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(summaryRows), 'Обобщение');
-  const filename = `Akt-Obrazec19${actNo ? '-N' + actNo : ''}-${site.name.replace(/[^\p{L}\p{N}]+/gu, '_')}.xlsx`;
   const bytes = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   return {
     blob: new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-    filename,
+    filename: fileBase(d) + '.xlsx',
     title: `Акт Образец 19${actNo ? ' № ' + actNo : ''} — ${site.name}`,
     text: `Акт Образец 19${actNo ? ' № ' + actNo : ''} за обект „${site.name}“ (Excel).`,
   };
 }
 
+export async function exportPdf(siteId, opts = {}) {
+  const { blob, filename } = renderPdf(await documentFor(siteId, opts));
+  downloadBlob(blob, filename);
+}
+
+// Отваря листа за споделяне на телефона; на компютър — менюто за изпращане.
+export async function sharePdf(siteId, opts = {}) {
+  const { blob, filename, title, text } = renderPdf(await documentFor(siteId, opts));
+  return shareOrDownload(blob, filename, { title, text });
+}
+
 export async function exportXlsx(siteId, opts = {}) {
-  const { blob, filename } = await buildXlsx(siteId, opts);
+  const { blob, filename } = renderXlsx(await documentFor(siteId, opts));
   downloadBlob(blob, filename);
 }
 
 export async function shareXlsx(siteId, opts = {}) {
-  const { blob, filename, title, text } = await buildXlsx(siteId, opts);
+  const { blob, filename, title, text } = renderXlsx(await documentFor(siteId, opts));
   return shareOrDownload(blob, filename, { title, text });
 }
 

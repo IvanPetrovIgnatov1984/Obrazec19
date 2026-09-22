@@ -77,7 +77,11 @@ function run(storeNames, mode, work) {
           reject(err);
           return;
         }
-        tx.oncomplete = () => resolve(result && result.value !== undefined ? result.value : result);
+        // Работата винаги връща кутийка { value }. Празната кутийка (търсен запис,
+        // който го няма) трябва да даде undefined — иначе проверките „не е намерено“
+        // виждат обект и рисуват екран с несъществуващ запис.
+        tx.oncomplete = () =>
+          resolve(result && typeof result === 'object' && 'value' in result ? result.value : result);
         tx.onerror = () => reject(tx.error);
         tx.onabort = () => reject(tx.error || new Error('Транзакцията е прекратена'));
       })

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'obrazec19-v75';
+const CACHE_NAME = 'obrazec19-v80';
 
 // Файловете на приложението — винаги се теглят от мрежата, когато има връзка,
 // и се кешират само за офлайн работа. Така стар код не може да „залепне“.
@@ -55,6 +55,37 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+function networkFirst(req) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (res) => {
+      if (settled) return;
+      settled = true;
+      resolve(res);
+    };
+    const timer = setTimeout(async () => {
+      const cached = await caches.match(req);
+      if (cached) finish(cached);
+    }, 4000);
+    // При навигация fetch не приема допълнителни настройки.
+    const net = req.mode === 'navigate' ? fetch(req) : fetch(req, { cache: 'no-store' });
+    net
+      .then((res) => {
+        clearTimeout(timer);
+        if (res && res.status === 200 && res.type === 'basic') {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+        }
+        finish(res);
+      })
+      .catch(async () => {
+        clearTimeout(timer);
+        const cached = await caches.match(req);
+        finish(cached || (await caches.match('./index.html')) || Response.error());
+      });
+  });
+}
+
 function isStatic(url) {
   return url.pathname.includes('/vendor/') || url.pathname.includes('/icons/');
 }
@@ -84,18 +115,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Кодът на приложението: първо мрежа, кешът е само резерва за офлайн.
-  event.respondWith(
-    fetch(req)
-      .then((res) => {
-        if (res && res.status === 200 && res.type === 'basic') {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
-        }
-        return res;
-      })
-      .catch(() =>
-        caches.match(req).then((cached) => cached || caches.match('./index.html'))
-      )
-  );
+  // Кодът на приложението: първо мрежа, кешът е резерва. При слаб сигнал
+  // (мрежата виси, но не пада) след 4 секунди се дава кешираното копие —
+  // иначе на обекта приложението зависва на бял екран.
+  event.respondWith(networkFirst(req));
 });

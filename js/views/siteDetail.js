@@ -1,9 +1,10 @@
 import { db, uid, deleteSiteCascade, deletePositionCascade } from '../db.js';
 import { layout } from '../utils/layout.js';
-import { escapeHtml, fmtNum, toast, getSetting } from '../utils/util.js';
+import { escapeHtml, fmtNum, fmtMoney, toast, getSetting } from '../utils/util.js';
 import { navigate } from '../router.js';
 import { SMR_CATALOG, SMR_CATEGORY_ORDER, OTHER_CATEGORY, categoryForDescription, keywordsFor } from '../data/smrCatalog.js';
 import { advancePlan } from '../utils/exporters.js';
+import { issuedActsFor, blockedByActs } from '../utils/reports.js';
 import { pickerHtml, wirePicker } from '../utils/picker.js';
 
 async function positionProgress(position) {
@@ -29,8 +30,8 @@ export async function detailView({ id }) {
       const noPrice = !Number(p.unitPrice);
       const priceTag = noPrice ? ' · <span class="tag-warn">няма цена</span>' : '';
       const qtyLine = planned > 0
-        ? `${fmtNum(done)} / ${fmtNum(planned)} ${escapeHtml(p.unit || '')}${p.unitPrice ? ' · ' + fmtNum(done * p.unitPrice) + ' / ' + fmtNum(planned * p.unitPrice) + ' €' : ''}${priceTag}`
-        : `${fmtNum(done)} ${escapeHtml(p.unit || '')}${p.unitPrice ? ' · ' + fmtNum(done * p.unitPrice) + ' €' : ''} · <span class="tag-extra">извън КС</span>${priceTag}`;
+        ? `${fmtNum(done)} / ${fmtNum(planned)} ${escapeHtml(p.unit || '')}${p.unitPrice ? ' · ' + fmtNum(done * p.unitPrice) + ' / ' + fmtMoney(planned * p.unitPrice) + ' €' : ''}${priceTag}`
+        : `${fmtNum(done)} ${escapeHtml(p.unit || '')}${p.unitPrice ? ' · ' + fmtMoney(done * p.unitPrice) + ' €' : ''} · <span class="tag-extra">извън КС</span>${priceTag}`;
       return `
         <div class="card pos-card" data-href="/sites/${id}/positions/${p.id}">
           <div class="site-card-top">
@@ -82,8 +83,8 @@ export async function detailView({ id }) {
   const boqValue = positions.reduce((sum, p) => sum + (Number(p.plannedQty) || 0) * (Number(p.unitPrice) || 0), 0);
   const plan = advancePlan(site, { boqValue });
   const advanceLine = plan.total
-    ? `<div class="muted small">Аванс: <strong>${fmtNum(plan.total)} €</strong>${
-        plan.mode === 'percent' ? ` (${plan.pct}% от ${fmtNum(boqValue)} €)` : ''
+    ? `<div class="muted small">Аванс: <strong>${fmtMoney(plan.total)} €</strong>${
+        plan.mode === 'percent' ? ` (${plan.pct}% от ${fmtMoney(boqValue)} €)` : ''
       } · ${plan.method === 'proportional' ? 'пропорционално приспадане' : 'приспадане до усвояване'}</div>`
     : '';
 
@@ -123,6 +124,13 @@ export async function detailView({ id }) {
       app.querySelectorAll('[data-del-pos]').forEach((btn) => {
         btn.addEventListener('click', async (e) => {
           e.stopPropagation();
+          const posId = btn.getAttribute('data-del-pos');
+          const posEntries = await db.getAllByIndex('entries', 'positionId', posId);
+          const blocking = await issuedActsFor(id, posEntries.map((x) => x.id));
+          if (blocking.length) {
+            alert(blockedByActs(blocking, 'Позицията има отчитания, които са'));
+            return;
+          }
           if (!confirm('Изтриване на позицията и всички нейни отчитания и снимки? Действието е необратимо.')) return;
           await deletePositionCascade(btn.getAttribute('data-del-pos'));
           toast('Позицията е изтрита');

@@ -29,10 +29,10 @@ export function pickerHtml(groups, { placeholder = 'Търси: армировк
     <div class="pick-box">
       <input type="search" class="pick-search" placeholder="${escapeHtml(placeholder)}" autocomplete="off" />
       <div class="muted small pick-count"></div>
+      <button type="button" class="btn btn-ghost btn-sm pick-manual" hidden></button>
       <div class="pick-list">${list}</div>
       <div class="pick-empty" hidden>
         <div class="muted small">Няма съвпадения в каталога.</div>
-        <button type="button" class="btn btn-ghost btn-sm pick-manual" hidden></button>
       </div>
     </div>
   `;
@@ -74,6 +74,9 @@ export function wirePicker(scopeEl, { total, onPick, onManual, disabledMessage }
     return shown;
   }
 
+  // Колко силно е съвпадението: 1 = всички думи в описанието; по-високо = по-слабо.
+  let tier = 0;
+
   function filter(q) {
     const words = tokens(q);
     const roots = words.map((w) => (w.length > 4 ? w.slice(0, 4) : w));
@@ -82,18 +85,19 @@ export function wirePicker(scopeEl, { total, onPick, onManual, disabledMessage }
       shown = apply(() => true);
     } else {
       // 1) точно в описанието, 2) и в категорията/синонимите, 3) по корен, 4) поне една дума
+      tier = 1;
       shown = apply((hay, desc) => words.every((w) => desc.includes(w)));
-      if (!shown) shown = apply((hay) => words.every((w) => hay.includes(w)));
-      if (!shown) shown = apply((hay, desc) => roots.every((w) => desc.includes(w)));
-      if (!shown) shown = apply((hay) => roots.every((w) => hay.includes(w)));
-      if (!shown && words.length > 1) shown = apply((hay) => roots.some((w) => hay.includes(w)));
+      if (!shown) { tier = 2; shown = apply((hay) => words.every((w) => hay.includes(w))); }
+      if (!shown) { tier = 3; shown = apply((hay, desc) => roots.every((w) => desc.includes(w))); }
+      if (!shown) { tier = 4; shown = apply((hay) => roots.every((w) => hay.includes(w))); }
+      if (!shown && words.length > 1) { tier = 5; shown = apply((hay) => roots.some((w) => hay.includes(w))); }
     }
     countEl.textContent = words.length ? `${shown} от ${total}` : `${total} вида СМР`;
     emptyEl.hidden = shown > 0;
     if (manualBtn && onManual) {
       const text = searchEl.value.trim();
       manualBtn.hidden = !text;
-      manualBtn.textContent = `+ Добави „${text}“ ръчно`;
+      manualBtn.textContent = `+ Добави „${text}“ като нова работа`;
     }
     if (words.length) listEl.scrollTop = 0;
   }
@@ -112,8 +116,10 @@ export function wirePicker(scopeEl, { total, onPick, onManual, disabledMessage }
   searchEl.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
+    // При слабо съвпадение Enter не бива да избира „каквото излезе първо“.
     const first = listEl.querySelector('.pick-item:not([hidden]):not(.already)');
-    if (first) onPick(first.dataset.key);
+    const strong = tier > 0 && tier <= 2;
+    if (first && (strong || !onManual)) onPick(first.dataset.key);
     else if (onManual && searchEl.value.trim()) onManual(searchEl.value.trim());
   });
 

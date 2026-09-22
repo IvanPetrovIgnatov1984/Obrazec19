@@ -994,3 +994,28 @@ input[type="date"] { padding-left: 10px; padding-right: 6px; }
 .price-notice[hidden] { display: none; }
 
 .tag-warn { color: var(--danger); font-weight: 550; }
+
+/* ---- Лента „има нова версия“ ---- */
+.update-bar {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(66px + var(--safe-bottom));
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 616px;
+  margin: 0 auto;
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  font-size: 14px;
+}
+.update-bar .btn { margin-top: 0; }
+
+.pick-box .pick-manual { align-self: flex-start; margin-top: 0; }
+.pick-box .pick-manual[hidden] { display: none; }

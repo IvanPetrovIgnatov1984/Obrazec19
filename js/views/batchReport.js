@@ -1,8 +1,8 @@
 import { db, uid, today } from '../db.js';
 import { layout } from '../utils/layout.js';
-import { escapeHtml, fmtNum, fmtDate, toast, getSetting, setSetting, fileToCompressedBlob } from '../utils/util.js';
+import { escapeHtml, fmtNum, fmtMoney, fmtDate, toast, getSetting, setSetting, fileToCompressedBlob, hasUnsavedInput } from '../utils/util.js';
 import { pickerHtml, wirePicker } from '../utils/picker.js';
-import { groupEntriesIntoReports, reportCardHtml, wireReportCards } from '../utils/reports.js';
+import { groupEntriesIntoReports, reportCardHtml, wireReportCards, issuedActsFor, blockedByActs } from '../utils/reports.js';
 import { navigate } from '../router.js';
 import { getPeople, personFieldHtml, wirePersonField, rememberPerson } from '../utils/people.js';
 import { SMR_CATALOG, SMR_CATEGORY_ORDER, OTHER_CATEGORY, categoryForDescription, resolveCategory, keywordsFor } from '../data/smrCatalog.js';
@@ -23,7 +23,8 @@ export async function batchReportView({ id }, query) {
   function remainingOf(p) {
     const planned = Number(p.plannedQty) || 0;
     if (!planned) return null;
-    return Math.max(0, planned - (doneByPos.get(p.id) || 0));
+    const left = Math.round((planned - (doneByPos.get(p.id) || 0)) * 1000) / 1000;
+    return left > 0.0005 ? left : 0;
   }
 
   // Всяко „Потвърди“ прави едно отчитане; тук показваме готовите отчитания за деня.
@@ -75,7 +76,7 @@ export async function batchReportView({ id }, query) {
       description: p.description,
       unit: p.unit || '',
       highlight: true,
-      note: 'в КС' + (rem != null ? ` · остават ${fmtNum(rem)} ${p.unit || ''}` : '') + (p.unitPrice ? ` · ${fmtNum(p.unitPrice)} €/${p.unit || ''}` : ''),
+      note: 'в КС' + (rem != null ? ` · остават ${fmtNum(rem)} ${p.unit || ''}` : '') + (p.unitPrice ? ` · ${fmtMoney(p.unitPrice)} €/${p.unit || ''}` : ''),
     });
   }
   SMR_CATALOG.forEach((item, i) => {
@@ -126,9 +127,12 @@ export async function batchReportView({ id }, query) {
   }
 
   // Позициите, по които още има неотчетено количество — за отчитане наведнъж.
-  const remainingPositions = positions
+  const remainingAll = positions
     .map((p) => ({ position: p, left: remainingOf(p) }))
     .filter((x) => x.left != null && x.left > 0);
+  // Съставна мярка (м2/см) се въвежда като два множителя — не може да се попълни сама.
+  const remainingPositions = remainingAll.filter((x) => !(x.position.unit || '').includes('/'));
+  const remainingCompound = remainingAll.length - remainingPositions.length;
 
   const people = await getPeople();
   const technicianLabel = site.role === 'client' ? 'Отчита (за Възложителя)' : 'Отчита (за Изпълнителя)';
@@ -148,7 +152,7 @@ export async function batchReportView({ id }, query) {
 
     <h3 class="section-title">Вече отчетено за ${fmtDate(date)} ${dayReports.length ? `(${dayReports.length})` : ''}</h3>
     ${dayReports.length
-      ? `${dayRowsHtml}${dayTotal ? `<div class="muted small">Общо за деня: <strong>${fmtNum(dayTotal)} €</strong></div>` : ''}`
+      ? `${dayRowsHtml}${dayTotal ? `<div class="muted small">Общо за деня: <strong>${fmtMoney(dayTotal)} €</strong></div>` : ''}`
       : `<div class="muted small">Няма отчитане за ${fmtDate(date)}. Въведи първата работа по-долу.${otherDatesHint}</div>`}
 
     <form id="batch-form" class="form">
@@ -176,8 +180,18 @@ export async function batchReportView({ id }, query) {
     html: layout({ title: 'Отчитане на СМР', back: `/sites/${id}`, body }),
     mount(app) {
       const dateForm = app.querySelector('#date-form');
+      // В Chrome датата се пише и от клавиатурата — всяка цифра на годината е
+      // „валидна“ дата (0002, 0020…). Изчакваме и приемаме само смислена година,
+      // а ако има попълнени редове — питаме, защото смяната ги изчиства.
+      let dateTimer = null;
       const goToDate = (d) => {
         if (!d || d === date) return;
+        const year = Number(String(d).slice(0, 4));
+        if (!(year >= 2000 && year <= 2100)) return;
+        if (hasUnsavedInput() && !confirm('Смяната на датата ще изчисти попълнените редове. Да продължа ли?')) {
+          dateForm.querySelector('[name=date]').value = date;
+          return;
+        }
         navigate(`/sites/${id}/report?date=${d}`);
         window.dispatchEvent(new HashChangeEvent('hashchange'));
       };
@@ -186,7 +200,15 @@ export async function batchReportView({ id }, query) {
         goToDate(new FormData(e.target).get('date'));
       });
       // Смяната на датата важи веднага — иначе работите се записват под старата.
-      dateForm.querySelector('[name=date]').addEventListener('change', (e) => goToDate(e.target.value));
+      dateForm.querySelector('[name=date]').addEventListener('change', (e) => {
+        clearTimeout(dateTimer);
+        const value = e.target.value;
+        dateTimer = setTimeout(() => goToDate(value), 900);
+      });
+      dateForm.querySelector('[name=date]').addEventListener('blur', (e) => {
+        clearTimeout(dateTimer);
+        goToDate(e.target.value);
+      });
 
       const reload = () => {
         navigate(`/sites/${id}/report?date=${date}`);
@@ -195,6 +217,11 @@ export async function batchReportView({ id }, query) {
 
       wireReportCards(app, {
         onDeleteEntry: async (entryId) => {
+          const blocking = await issuedActsFor(id, [entryId]);
+          if (blocking.length) {
+            alert(blockedByActs(blocking, 'Този ред е'));
+            return;
+          }
           if (!confirm('Изтриване на реда от отчитането?')) return;
           await db.deleteByIndex('photos', 'entryId', entryId);
           await db.delete('entries', entryId);
@@ -204,6 +231,11 @@ export async function batchReportView({ id }, query) {
         onDeleteReport: async (key) => {
           const group = dayReports.find((g) => g.key === key);
           if (!group) return;
+          const blocking = await issuedActsFor(id, group.entries.map((e) => e.id));
+          if (blocking.length) {
+            alert(blockedByActs(blocking, 'Това отчитане е'));
+            return;
+          }
           if (!confirm(`Изтриване на цялото отчитане (${group.entries.length} реда)? Действието е необратимо.`)) return;
           for (const e of group.entries) {
             await db.deleteByIndex('photos', 'entryId', e.id);
@@ -255,9 +287,13 @@ export async function batchReportView({ id }, query) {
       function rowQty(rowEl) {
         const p = rowTarget(rowEl);
         if (!p) return { qty: 0, base: 0, coats: 1, position: null };
-        if ((p.unit || '').includes('/')) {
-          const a = parseFloat(rowEl.querySelector('.row-factorA').value) || 0;
-          const b = parseFloat(rowEl.querySelector('.row-factorB').value) || 0;
+        // Съставна мярка се смята от двете полета, ако ги има на екрана.
+        // Ръчно въведена мярка с „/“ (м3/км) идва с едно поле — тогава е обикновена.
+        const faEl = rowEl.querySelector('.row-factorA');
+        const fbEl = rowEl.querySelector('.row-factorB');
+        if (faEl && fbEl) {
+          const a = parseFloat(faEl.value) || 0;
+          const b = parseFloat(fbEl.value) || 0;
           return { qty: a * b, base: a * b, coats: 1, position: p, a, b };
         }
         const qtyEl = rowEl.querySelector('.row-qty');
@@ -275,7 +311,7 @@ export async function batchReportView({ id }, query) {
           const { qty, position } = rowQty(rowEl);
           if (position) total += qty * (Number(position.unitPrice) || 0);
         });
-        newTotalEl.textContent = total ? `Обща стойност на отчитането: ${fmtNum(total)} €` : '';
+        newTotalEl.textContent = total ? `Обща стойност на отчитането: ${fmtMoney(total)} €` : '';
       }
 
       function renderFields(rowEl) {
@@ -332,7 +368,7 @@ export async function batchReportView({ id }, query) {
           const parts = [];
           if (coats > 1) parts.push(`${fmtNum(base)} × ${coats} ръце = ${fmtNum(qty)} ${position.unit}`);
           else if ((position.unit || '').includes('/')) parts.push(`= ${fmtNum(qty)} ${position.unit}`);
-          if (position.unitPrice) parts.push(`Стойност: ${fmtNum(qty * position.unitPrice)} €`);
+          if (position.unitPrice) parts.push(`Стойност: ${fmtMoney(qty * position.unitPrice)} €`);
           else if (qty) parts.push(`${fmtNum(qty)} ${position.unit} · няма единична цена, стойност няма да се сметне`);
           if (!position.isNew) {
             const rem = remainingOf(position);
@@ -359,7 +395,7 @@ export async function batchReportView({ id }, query) {
         chosen.hidden = false;
         chosen.querySelector('.chosen-meta').textContent = p.isNew
           ? 'нова позиция — ще се добави в количествената сметка'
-          : `${p.unit}${p.unitPrice ? ' · ' + fmtNum(p.unitPrice) + ' €/' + p.unit : ''}`;
+          : `${p.unit}${p.unitPrice ? ' · ' + fmtMoney(p.unitPrice) + ' €/' + p.unit : ''}`;
         renderFields(rowEl);
       }
 
@@ -437,6 +473,9 @@ export async function batchReportView({ id }, query) {
           }
           fillAllBtn.hidden = true;
           refreshSummary();
+          if (remainingCompound) {
+            toast(`${remainingCompound} ${remainingCompound === 1 ? 'позиция със съставна мярка се въвежда' : 'позиции със съставна мярка се въвеждат'} ръчно`);
+          }
         });
       }
 
@@ -476,8 +515,11 @@ export async function batchReportView({ id }, query) {
         fileInput.value = '';
       });
 
+      let saving = false;
       app.querySelector('#batch-form').addEventListener('submit', async (e) => {
         e.preventDefault();
+        // Второ „Потвърди“, докато първото още записва, би дублирало отчитането.
+        if (saving) return;
         const fd = new FormData(e.target);
         const technicianName = readPerson();
         const note = fd.get('note').trim();
@@ -491,7 +533,7 @@ export async function batchReportView({ id }, query) {
             missingUnit = missingUnit || rowEl;
             return;
           }
-          const compound = (position.unit || '').includes('/');
+          const compound = a !== undefined && b !== undefined;
           const extra = compound
             ? (() => {
                 const [unitA, unitB] = position.unit.split('/').map((s) => s.trim());
@@ -516,6 +558,10 @@ export async function batchReportView({ id }, query) {
 
         // Всички редове от едно „Потвърди“ образуват едно отчитане.
         const reportId = uid();
+        saving = true;
+        const submitBtn = app.querySelector('#batch-form button[type=submit]');
+        if (submitBtn) submitBtn.disabled = true;
+        const createdPositionIds = [];
         // Работите извън количествената сметка стават нови позиции (по една на описание).
         const createdByDesc = new Map();
         let createdCount = 0;
@@ -542,6 +588,7 @@ export async function batchReportView({ id }, query) {
                 createdAt: Date.now(),
               });
               createdByDesc.set(key, positionId);
+              createdPositionIds.push(positionId);
               createdCount++;
             }
           }
@@ -577,6 +624,18 @@ export async function batchReportView({ id }, query) {
         } catch (err) {
           // Досега такъв провал минаваше мълчаливо и работите просто изчезваха.
           console.error('Записът на отчитането се провали', err);
+          // Връщаме частично записаното — иначе повторният опит би го дублирал.
+          try {
+            for (const eid of savedIds) {
+              await db.deleteByIndex('photos', 'entryId', eid);
+              await db.delete('entries', eid);
+            }
+            for (const pid of createdPositionIds) await db.delete('positions', pid);
+          } catch (rollbackErr) {
+            console.error('Връщането на частичния запис се провали', rollbackErr);
+          }
+          saving = false;
+          if (submitBtn) submitBtn.disabled = false;
           alert(
             'Отчитането НЕ беше записано.\n\n' +
               String((err && err.message) || err) +

@@ -1,5 +1,6 @@
 import { route, notFound, startRouter, navigate } from './router.js';
 import { db } from './db.js';
+import { forceUpdate, hasUnsavedInput, showUpdateBar } from './utils/util.js';
 import { listView, newSiteView, editSiteView } from './views/sites.js';
 import { detailView, newPositionView } from './views/siteDetail.js';
 import { positionDetailView, reportView } from './views/position.js';
@@ -33,7 +34,9 @@ notFound(() => '<div class="empty">Страницата не е намерена
     for (const site of sites) {
       if (Object.prototype.hasOwnProperty.call(site, 'egn')) {
         const { egn, ...rest } = site;
-        await db.put('sites', rest);
+        // putRaw пази старото време на промяна — иначе при връщане от архив
+        // тези обекти биха „спечелили“ срещу по-нови данни.
+        await db.putRaw('sites', rest);
       }
     }
   } catch (err) {
@@ -47,9 +50,14 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch((err) => console.error('SW register failed', err));
     // Нова версия поема управлението → презареждаме веднъж, за да върви новият код.
+    // Но не посред отчитане: тогава само казваме, че има нова версия.
     let reloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (reloading) return;
+      if (hasUnsavedInput()) {
+        showUpdateBar();
+        return;
+      }
       reloading = true;
       window.location.reload();
     });
@@ -60,18 +68,7 @@ const reloadBtn = document.getElementById('reload-btn');
 if (reloadBtn) {
   reloadBtn.addEventListener('click', async () => {
     reloadBtn.classList.add('spinning');
-    try {
-      if ('serviceWorker' in navigator) {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map((r) => r.unregister()));
-      }
-      if ('caches' in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((k) => caches.delete(k)));
-      }
-    } catch (err) {
-      console.error('Force refresh cleanup failed', err);
-    }
-    location.href = location.pathname + '?_r=' + Date.now();
+    const done = await forceUpdate();
+    if (!done) reloadBtn.classList.remove('spinning');
   });
 }
